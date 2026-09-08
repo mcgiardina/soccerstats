@@ -28,7 +28,9 @@ at 5 fps takes roughly 6-8 minutes after the download.
 
 Known limits of the stock COCO model (no Roboflow football weights), measured on two
 sample games in Sept 2026:
-- Ball found in ~24% of frames; team attribution was correct in 12/12 spot-checked frames.
+- Ball found in ~24% of frames. Team attribution (hue-grouped kit colours) was correct in
+  12/12 spot-checked frames on a red-vs-white game and 11/12 on white-vs-navy under harsh
+  sun and shade. `python spotcheck.py <game-id> <youtube-id>` renders the montage for any cached game.
   Possession is a share of *attributed* frames and `ball_frames` records the denominator.
 - **Shot detection is not possible** without a goal / goalkeeper / pitch model: the motion
   detector finds kicks (long balls, clearances, goal kicks). They land as machine tags
