@@ -3,7 +3,18 @@ Recall over precision; a human confirms in the app. Team is guessed from who las
 import numpy as np
 
 
-def candidates(dets, fps=5.0, accel_px=140, min_gap_s=6):
+def _holder_before(sequence, t, lookback_s=2.0):
+    """Team that had the ball most recently before t, from the smoothed possession sequence."""
+    holder = None
+    for st, team in sequence:
+        if st > t:
+            break
+        if team and st >= t - lookback_s:
+            holder = team
+    return holder
+
+
+def candidates(dets, fps=5.0, accel_px=140, min_gap_s=6, sequence=None):
     out = []
     last_t = -1e9
     pts = [(d.t, d.ball) for d in dets]
@@ -22,7 +33,8 @@ def candidates(dets, fps=5.0, accel_px=140, min_gap_s=6):
         h = dets[i].img.shape[0]
         toward_goal = b2[1] < h * 0.6
         conf = min(0.9, 0.35 + 0.15 * (acc / (accel_px * fps / 5)) + (0.15 if toward_goal else 0))
-        out.append({"t": max(0.0, t2 - 1.0), "confidence": conf, "team": None})
+        team = _holder_before(sequence, t1) if sequence else None
+        out.append({"t": max(0.0, t2 - 1.0), "confidence": conf, "team": team})
         last_t = t2
     print(f"{len(out)} shot candidates")
     return out

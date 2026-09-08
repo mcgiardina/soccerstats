@@ -74,4 +74,5 @@ def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, max_dist_px=90):
                             "ball_frames": n, "turnovers_us": T["to_us"], "turnovers_them": T["to_them"]})
     full = tallies["full"]
     print(f"attributed frames: {full['us'] + full['them']} / {len(raw)}")
-    return {"team_stats": team_stats, "buckets": bucket_rows}
+    sequence = [(t, team) for (t, _), team in zip(raw, smoothed)]
+    return {"team_stats": team_stats, "buckets": bucket_rows, "sequence": sequence}

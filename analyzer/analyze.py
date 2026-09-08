@@ -50,7 +50,7 @@ def main() -> int:
 
         offsets = video.period_offsets(main_video)
         poss = possession.compute(dets, assign, offsets, fps=args.fps)
-        cands = shots.candidates(dets, fps=args.fps)
+        cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])
 
         H = None
         if homography.available():
