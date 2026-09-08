@@ -33,7 +33,7 @@ def available():
     return bool(weights_path())
 
 
-AREA_MIN_FRAC = float(os.environ.get("HOMOG_AREA_MIN", "0.03"))
+AREA_MIN_FRAC = float(os.environ.get("HOMOG_AREA_MIN", "0.01"))   # measured: 0.03 keeps ~1% of frames, 0.005 ~8%
 
 
 def _plausible(H, src, dst, feet):

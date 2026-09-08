@@ -28,6 +28,7 @@ def main() -> int:
     ap.add_argument("--from-cache", action="store_true", help="Reuse cached detections + team labels; skip download/detect")
     ap.add_argument("--relabel", action="store_true", help="With --from-cache: redo team assignment (re-decodes frames, no re-detection)")
     ap.add_argument("--max-height", type=int, default=720, help="Download resolution cap (720 default; 1080 helps the tiny ball)")
+    ap.add_argument("--refit-homography", action="store_true", help="With --from-cache: re-run the pitch model (re-decodes frames at 1 fps)")
     ap.add_argument("--camera", default="ballercam", help="Calibration name under calib/ used to de-warp a wide_fixed source")
     args = ap.parse_args()
 
@@ -97,6 +98,14 @@ def main() -> int:
                 step = max(1, int(round(args.fps)))
                 H = homography.fit(frames[::step], dets_by_t=by_t)
             homography.save_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"), H)
+        elif args.from_cache and args.refit_homography and homography.available():
+            by_t = {round(d.t, 1): d for d in dets}
+            path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
+            step = max(1, int(round(args.fps)))
+            fr = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
+            H = homography.fit(fr[::step], dets_by_t=by_t)
+            homography.save_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"), H)
+            del fr
         elif args.from_cache:
             H = homography.load_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"))
         shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
