@@ -112,7 +112,7 @@ def main() -> int:
         more, kick_cands = shots.classify_by_keeper(kick_cands, dets, fps=args.fps)
         shot_cands = sorted(shot_cands + more, key=lambda c: c["t"])
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
-        located = {round(s["t"], 1): s["location"] for s in shot_cands}
+        located = {round(s["t"], 1): s["location"] for s in shot_cands if s.get("location")}
 
         results = {
             "game_id": args.game_id, "video_id": main_video["id"], "model_version": MODEL_VERSION, "params": params,

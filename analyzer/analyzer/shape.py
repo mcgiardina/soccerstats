@@ -14,8 +14,9 @@ def snapshots(dets, label_of, H, offsets, min_players=7, min_conf=0.6):
         if d is None or per is None:
             continue
         teams = {"us": [], "them": []}
+        cached = getattr(d, "labels", None)
         for p in d.players:
-            lab = label_of(d.img, p)
+            lab = cached[p[4]] if cached is not None else label_of(d.img, p)
             if lab is None:
                 continue
             x, y = project(Hm, (p[0] + p[2]) / 2, p[3])
