@@ -278,7 +278,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
 
           {g.notes ? <div className="card"><h3>Notes</h3><p className="small" style={{ whiteSpace: "pre-wrap" }}>{g.notes}</p></div> : null}
-          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · unlisted on YouTube</div> : null}
+          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · YouTube</div> : null}
         </div>
       </div>
 
