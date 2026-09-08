@@ -30,7 +30,7 @@ def torso_color(img, box):
     return np.median(hsv[m], axis=0)
 
 
-def assign(dets, game_id, force_confirm=False):
+def assign(dets, game_id, force_confirm=False, us_cluster=None):
     samples, refs = [], []
     for fi, d in enumerate(dets[::3]):
         for p in d.players:
@@ -52,9 +52,11 @@ def assign(dets, game_id, force_confirm=False):
     if ratio < 1.6:
         return None
 
-    us_cluster = None if force_confirm else db.get_team_choice(game_id)
+    _write_preview(dets, refs, km.labels_)
+    if us_cluster is None and not force_confirm:
+        us_cluster = db.get_team_choice(game_id)
     if us_cluster is None:
-        us_cluster = _confirm(dets, refs, km.labels_, feats)
+        us_cluster = _confirm()
     # persist answer in this run's params happens through write_results caller; keep simple: stash on module
     assign.us_cluster = us_cluster
 
@@ -69,23 +71,30 @@ def assign(dets, game_id, force_confirm=False):
     return label_of
 
 
-def _confirm(dets, refs, labels, feats):
-    """Write a preview frame with cluster-coloured boxes and ask once which is us."""
-    # pick the frame with most players
-    best = max(range(len(dets)), key=lambda i: len(dets[i].players))
-    img = dets[best].img.copy()
-    from sklearn.cluster import KMeans  # noqa: F401 (type hint only)
+PREVIEW = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache", "team_preview.jpg")
+
+
+def _write_preview(dets, refs, labels):
+    """Preview frame with cluster-coloured boxes: A = yellow (cluster 0), B = magenta (cluster 1)."""
     idx = {r: l for r, l in zip(refs, labels)}
+    # frame (among the sampled ones) with the most labelled players
+    def score(i):
+        return sum(1 for p in dets[i].players if (i, p[4]) in idx)
+    best = max(range(0, len(dets), 3), key=score)
+    img = dets[best].img.copy()
     for p in dets[best].players:
-        k = idx.get((best - best % 3, p[4]))
+        k = idx.get((best, p[4]))
         if k is None:
             continue
         col = (0, 200, 255) if k == 0 else (255, 80, 200)
         cv2.rectangle(img, (int(p[0]), int(p[1])), (int(p[2]), int(p[3])), col, 2)
         cv2.putText(img, "A" if k == 0 else "B", (int(p[0]), int(p[1]) - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, col, 2)
-    out = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache", "team_preview.jpg")
-    cv2.imwrite(out, img)
-    print(f"Open {out}. Yellow boxes = A, magenta = B.")
+    os.makedirs(os.path.dirname(PREVIEW), exist_ok=True)
+    cv2.imwrite(PREVIEW, img)
+    print(f"team preview written to {PREVIEW} (A = yellow, B = magenta)")
+
+
+def _confirm():
     while True:
         ans = input("Which cluster is us? [A/B]: ").strip().upper()
         if ans in ("A", "B"):

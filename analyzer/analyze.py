@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Match Film analyzer. Usage: python analyze.py --game-id <uuid> [--backend local|cloud]"""
 import argparse
+import json
+import os
 import sys
 import time
 import traceback
@@ -21,6 +23,8 @@ def main() -> int:
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--confirm-team", action="store_true", help="Re-ask which colour cluster is us")
     ap.add_argument("--limit-seconds", type=int, default=None, help="Analyze only the first N seconds (debug)")
+    ap.add_argument("--dry-run", action="store_true", help="Compute everything, write nothing to Supabase; dump results JSON")
+    ap.add_argument("--us-cluster", choices=["A", "B"], default=None, help="Which kit-colour cluster is us (skips the prompt)")
     args = ap.parse_args()
 
     game = db.get_game(args.game_id)
@@ -32,14 +36,15 @@ def main() -> int:
     wide = next((v for v in vids if v.get("kind") == "wide_fixed"), None)
     main_video = next((v for v in vids if v.get("kind") != "wide_fixed"), vids[0])
     params = {"backend": args.backend, "fps": args.fps, "wide_source": bool(wide), "limit_seconds": args.limit_seconds}
-    run = db.claim_run(args.game_id, main_video["id"], MODEL_VERSION, params)
+    run = {"id": "dry-run"} if args.dry_run else db.claim_run(args.game_id, main_video["id"], MODEL_VERSION, params)
     print(f"run {run['id']} started for game {args.game_id}")
 
     try:
         path = fetch.download(main_video["youtube_id"])
         frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
         dets = detect.run(frames, backend=args.backend)
-        assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team)
+        us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
+        assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team, us_cluster=us_cluster)
         if assign is None:
             raise RuntimeError("Kit colours too similar to separate teams; possession not reported.")
 
@@ -55,6 +60,20 @@ def main() -> int:
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = homography.locate_shots(cands, dets, H) if H else {}
 
+        results = {
+            "game_id": args.game_id, "video_id": main_video["id"], "model_version": MODEL_VERSION, "params": params,
+            "frames": len(frames), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
+            "shot_candidates": cands, "shot_locations": located, "shape_snapshots": len(snaps),
+        }
+        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", f"{args.game_id}_results.json")
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=1, default=float)
+        print(f"results written to {out_path}")
+        if args.dry_run:
+            print(json.dumps({k: results[k] for k in ("frames", "team_stats")}, indent=1, default=float))
+            print(f"{len(cands)} shot candidates; dry run, nothing written to Supabase")
+            return 0
         db.write_results(
             game_id=args.game_id, run_id=run["id"], video_id=main_video["id"],
             team_stats=poss["team_stats"], buckets=poss["buckets"],
@@ -66,7 +85,8 @@ def main() -> int:
         return 0
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
-        db.finish_run(run["id"], "failed", error=str(e)[:500])
+        if not args.dry_run:
+            db.finish_run(run["id"], "failed", error=str(e)[:500])
         return 1
     finally:
         time.sleep(0.1)

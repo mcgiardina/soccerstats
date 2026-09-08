@@ -1,6 +1,7 @@
 """yt-dlp at 720p, cached locally. The cache dir is gitignored."""
 import os
 import subprocess
+import sys
 
 CACHE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
 
@@ -10,8 +11,9 @@ def download(youtube_id: str) -> str:
     out = os.path.join(CACHE, f"{youtube_id}.mp4")
     if os.path.exists(out) and os.path.getsize(out) > 1_000_000:
         return out
-    cmd = ["yt-dlp", "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]",
-           "--merge-output-format", "mp4", "-o", out, f"https://www.youtube.com/watch?v={youtube_id}"]
+    # Video-only: no audio needed for analysis and no ffmpeg merge step required.
+    fmt = "bestvideo[height<=720][ext=mp4][vcodec^=avc1]/bestvideo[height<=720][ext=mp4]/best[height<=720][ext=mp4]"
+    cmd = [sys.executable, "-m", "yt_dlp", "-f", fmt, "--no-playlist", "-o", out, f"https://www.youtube.com/watch?v={youtube_id}"]
     print("fetching", youtube_id)
     subprocess.run(cmd, check=True)
     return out

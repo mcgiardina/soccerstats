@@ -10,9 +10,12 @@ _client = None
 def client():
     global _client
     if _client is None:
-        url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_ANON_KEY")
         if not url or not key:
-            raise SystemExit("Set SUPABASE_URL and SUPABASE_SERVICE_KEY in analyzer/.env")
+            raise SystemExit("Set SUPABASE_URL and SUPABASE_SERVICE_KEY (or SUPABASE_ANON_KEY for --dry-run) in analyzer/.env")
+        if not os.environ.get("SUPABASE_SERVICE_KEY"):
+            print("no SUPABASE_SERVICE_KEY: reads only (published games); use --dry-run")
         _client = create_client(url, key)
     return _client
 
