@@ -19,6 +19,8 @@ class FrameDet:
     keepers: list = field(default_factory=list)
     ball: tuple = None                            # (cx, cy) or None
     img: object = None
+    labels: list = None                           # per-player 'us'|'them'|None once teams are assigned
+    size: tuple = None                            # (h, w)
 
 
 def _model(backend: str):
@@ -41,14 +43,14 @@ def run(frames, backend="local"):
     out = []
     for f in tqdm(frames, desc="detect"):
         res = model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ)[0]
-        fd = FrameDet(t=f.t, img=f.img)
+        fd = FrameDet(t=f.t, img=f.img, size=f.img.shape[:2])
         if res.boxes is None:
             out.append(fd); continue
         xyxy = res.boxes.xyxy.cpu().numpy()
         cls = res.boxes.cls.cpu().numpy().astype(int)
-        ids = np.arange(len(cls))
+        ids = np.zeros(len(cls), dtype=int)   # replaced below by the index within fd.players
         conf = res.boxes.conf.cpu().numpy()
-        for box, c, tid, cf in zip(xyxy, cls, ids, conf):
+        for box, c, _tid, cf in zip(xyxy, cls, ids, conf):
             x1, y1, x2, y2 = box
             is_ball = c == (RF_BALL if football else COCO_BALL)
             if not is_ball and cf < PERSON_CONF:
@@ -58,17 +60,51 @@ def run(frames, backend="local"):
                     if fd.ball is None or cf > fd.ball[2]:
                         fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, cf)
                 elif c == RF_PLAYER:
-                    fd.players.append((x1, y1, x2, y2, int(tid)))
+                    fd.players.append((x1, y1, x2, y2, len(fd.players)))
                 elif c == RF_GK:
-                    fd.keepers.append((x1, y1, x2, y2, int(tid)))
+                    fd.keepers.append((x1, y1, x2, y2, len(fd.keepers)))
                 # referees dropped
             else:
                 if c == COCO_BALL:
                     if fd.ball is None or cf > fd.ball[2]:
                         fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, cf)
                 elif c == COCO_PERSON:
-                    fd.players.append((x1, y1, x2, y2, int(tid)))
+                    fd.players.append((x1, y1, x2, y2, len(fd.players)))
         if fd.ball is not None:
             fd.ball = fd.ball[:2]
         out.append(fd)
     return out
+
+
+# ---- local detection cache -------------------------------------------------------------
+# Lets possession / shot heuristics be re-tuned without re-running the network. Stays on the
+# operator's machine; nothing here is written to the database. No identities, no tracking.
+import gzip
+import json
+
+
+def save_cache(path, dets, fps):
+    rows = []
+    for d in dets:
+        rows.append({
+            "t": round(d.t, 3),
+            "ball": [round(float(d.ball[0]), 1), round(float(d.ball[1]), 1)] if d.ball else None,
+            "players": [[round(float(p[0]), 1), round(float(p[1]), 1), round(float(p[2]), 1), round(float(p[3]), 1)] for p in d.players],
+            "labels": d.labels,
+        })
+    with gzip.open(path, "wt") as f:
+        json.dump({"fps": fps, "size": list(dets[0].size) if dets else None, "frames": rows}, f)
+    print(f"detections cached to {path}")
+
+
+def load_cache(path):
+    with gzip.open(path, "rt") as f:
+        data = json.load(f)
+    dets = []
+    size = tuple(data["size"]) if data.get("size") else None
+    for r in data["frames"]:
+        players = [(b[0], b[1], b[2], b[3], i) for i, b in enumerate(r["players"])]
+        dets.append(FrameDet(t=r["t"], players=players, ball=tuple(r["ball"]) if r["ball"] else None,
+                             labels=r["labels"], size=size))
+    print(f"loaded {len(dets)} cached frames from {path}")
+    return data["fps"], dets

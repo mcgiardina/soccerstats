@@ -25,6 +25,7 @@ def main() -> int:
     ap.add_argument("--limit-seconds", type=int, default=None, help="Analyze only the first N seconds (debug)")
     ap.add_argument("--dry-run", action="store_true", help="Compute everything, write nothing to Supabase; dump results JSON")
     ap.add_argument("--us-cluster", choices=["A", "B"], default=None, help="Which kit-colour cluster is us (skips the prompt)")
+    ap.add_argument("--from-cache", action="store_true", help="Reuse cached detections + team labels; skip download/detect")
     args = ap.parse_args()
 
     game = db.get_game(args.game_id)
@@ -40,20 +41,29 @@ def main() -> int:
     print(f"run {run['id']} started for game {args.game_id}")
 
     try:
-        path = fetch.download(main_video["youtube_id"])
-        frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
-        dets = detect.run(frames, backend=args.backend)
-        us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
-        assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team, us_cluster=us_cluster)
-        if assign is None:
-            raise RuntimeError("Kit colours too similar to separate teams; possession not reported.")
+        cache_path = os.path.join(fetch.CACHE, f"{args.game_id}_dets.json.gz")
+        if args.from_cache and os.path.exists(cache_path):
+            args.fps, dets = detect.load_cache(cache_path)
+            frames, assign, path = [], None, None
+        else:
+            path = fetch.download(main_video["youtube_id"])
+            frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
+            dets = detect.run(frames, backend=args.backend)
+            us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
+            assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team, us_cluster=us_cluster)
+            if assign is None:
+                raise RuntimeError("Kit colours too similar to separate teams; possession not reported.")
+            for d in dets:
+                d.labels = [assign(d.img, p) for p in d.players]
+            if args.limit_seconds is None:
+                detect.save_cache(cache_path, dets, args.fps)
 
         offsets = video.period_offsets(main_video)
         poss = possession.compute(dets, assign, offsets, fps=args.fps)
         cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])
 
         H = None
-        if homography.available():
+        if homography.available() and frames:
             src_path = fetch.download(wide["youtube_id"]) if wide else path
             src_frames = video.sample(src_path, fps=1.0, limit_seconds=args.limit_seconds) if wide else frames
             H = homography.fit(src_frames)
@@ -62,7 +72,7 @@ def main() -> int:
 
         results = {
             "game_id": args.game_id, "video_id": main_video["id"], "model_version": MODEL_VERSION, "params": params,
-            "frames": len(frames), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
+            "frames": len(dets), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
             "shot_candidates": cands, "shot_locations": located, "shape_snapshots": len(snaps),
         }
         out_path = os.path.join(fetch.CACHE, f"{args.game_id}_results.json")

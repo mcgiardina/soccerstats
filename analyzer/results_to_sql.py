@@ -7,6 +7,7 @@ import uuid
 
 path, game_id = sys.argv[1], sys.argv[2]
 swap = "--swap-teams" in sys.argv   # use if the cluster you called "us" turned out to be them
+top_n = int(sys.argv[sys.argv.index("--top") + 1]) if "--top" in sys.argv else None   # keep only the N most confident shot candidates
 r = json.load(open(path))
 run_id = str(uuid.uuid4())
 video_id = r["video_id"]
@@ -28,7 +29,10 @@ for b in r["buckets"]:
     tu, tt = (b["turnovers_them"], b["turnovers_us"]) if swap else (b["turnovers_us"], b["turnovers_them"])
     out.append(f"insert into stat_buckets (game_id, run_id, bucket_start_s, bucket_end_s, possession_us_pct, ball_frames, turnovers_us, turnovers_them) values "
                f"('{game_id}', '{run_id}', {b['bucket_start_s']}, {b['bucket_end_s']}, {p}, {b['ball_frames']}, {tu}, {tt});")
-for c in r["shot_candidates"]:
+cands = sorted(r["shot_candidates"], key=lambda c: -c["confidence"])
+if top_n:
+    cands = sorted(cands[:top_n], key=lambda c: c["t"])
+for c in cands:
     out.append(f"insert into tags (game_id, video_id, t_seconds, type, team, label, source, confidence) values "
                f"('{game_id}', '{video_id}', {round(c['t'], 1)}, 'shot', {team(c.get('team'))}, 'machine shot candidate', 'machine', {round(c['confidence'], 3)});")
 print("\n".join(out))

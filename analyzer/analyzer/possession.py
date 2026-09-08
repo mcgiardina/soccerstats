@@ -21,7 +21,8 @@ def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, min_hold_s=2.0, max_
                 best, bd = p, dist
         if best is None or bd > max_dist_px:
             raw.append((d.t, None)); continue
-        raw.append((d.t, label_of(d.img, best)))
+        cached = getattr(d, "labels", None)
+        raw.append((d.t, cached[best[4]] if cached is not None else label_of(d.img, best)))
 
     # majority vote over a sliding window
     win = max(1, int(round(smooth_s * fps)))
