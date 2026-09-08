@@ -51,7 +51,7 @@ def get_team_choice(game_id):
     return (rows[0]["params"] or {}).get("us_cluster") if rows else None
 
 
-def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch):
+def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch, kick_tags=()):
     c = client()
     # Replace prior machine stats for this game; human_adjusted rows are untouched.
     c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
@@ -67,13 +67,13 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
     existing = c.table("tags").select("t_seconds,type").eq("game_id", game_id).execute().data
     taken = [float(t["t_seconds"]) for t in existing if t["type"] in ("shot", "goal", "penalty")]
     rows = []
-    for s in shot_tags:
+    for s, label in [(x, "machine shot candidate") for x in shot_tags] + [(x, "machine kick candidate") for x in kick_tags]:
         # Don't propose a shot within 4 s of one a human already tagged.
         if any(abs(s["t"] - t) < 4 for t in taken):
             continue
         rows.append({"game_id": game_id, "video_id": video_id, "t_seconds": round(s["t"], 1), "type": "shot",
                      "team": s.get("team"), "source": "machine", "confidence": round(float(s["confidence"]), 3),
-                     "label": "machine kick candidate"})
+                     "label": label})
     inserted = c.table("tags").insert(rows).select().execute().data if rows else []
     # Machine locations go on the shots table as proposals, marked 'machine'.
     from analyzer.xg import compute_xg, MODEL_VERSION

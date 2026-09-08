@@ -35,13 +35,20 @@ def find_weights(env_key: str, filename: str):
 
 
 def _model(backend: str):
+    """Returns (people_model, ball_model_or_None, device, football).
+    With the Roboflow football weights: people (player/keeper/referee) and the ball come from
+    that model, and the stock COCO model is run as a second ball detector. Measured on an
+    AI-panned 720p game: COCO alone saw the ball in 34% of frames, the football model in 19%,
+    the union in 45%. Without the football weights only the COCO model runs."""
     from ultralytics import YOLO
     football = find_weights("PLAYER_WEIGHTS", "football-player-detection.pt")
-    weights = football or ("yolo11m.pt" if backend == "cloud" else "yolo11s.pt")
-    print(f"player model: {weights}")
+    coco = "yolo11m.pt" if backend == "cloud" else "yolo11s.pt"
     device = "mps" if backend == "local" else 0
-    m = YOLO(weights)
-    return m, device, bool(football)
+    if football:
+        print(f"people + ball: {football}; extra ball detector: {coco}")
+        return YOLO(football), YOLO(coco), device, True
+    print(f"people + ball: {coco} (no football weights; run get_weights.sh)")
+    return YOLO(coco), None, device, False
 
 
 # The ball is tiny at 720p. Run the net at 1280 and keep a low threshold for the ball only;
@@ -52,12 +59,20 @@ PERSON_CONF = 0.35
 
 
 def run(frames, backend="local"):
-    model, device, football = _model(backend)
+    model, ball_model, device, football = _model(backend)
     out = []
     for f in tqdm(frames, desc="detect"):
         res = model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ)[0]
         fd = FrameDet(t=f.t, img=f.img, size=f.img.shape[:2])
+        if ball_model is not None:
+            rb = ball_model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ, classes=[COCO_BALL])[0]
+            if rb.boxes is not None and len(rb.boxes):
+                i = int(rb.boxes.conf.argmax())
+                x1, y1, x2, y2 = rb.boxes.xyxy[i].tolist()
+                fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, float(rb.boxes.conf[i]))
         if res.boxes is None:
+            if fd.ball is not None:
+                fd.ball = fd.ball[:2]
             out.append(fd); continue
         xyxy = res.boxes.xyxy.cpu().numpy()
         cls = res.boxes.cls.cpu().numpy().astype(int)

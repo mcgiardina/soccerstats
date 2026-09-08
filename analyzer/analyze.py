@@ -82,24 +82,32 @@ def main() -> int:
         poss = possession.compute(dets, assign, offsets, fps=args.fps)
         cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])
 
-        H = None
+        H = {}
         if homography.available() and frames:
             # Prefer the wide-angle source for anything positional; de-warp it if a calibration exists.
+            by_t = {round(d.t, 1): d for d in dets}
             if wide:
                 src_path = fetch.download(wide["youtube_id"], max_height=args.max_height)
                 fn = dewarp.load(args.camera)
                 print(f"wide source {'de-warped with ' + args.camera if fn else 'used as-is (no calib/' + args.camera + '.json)'}")
                 src_frames = video.sample(src_path, fps=1.0, limit_seconds=args.limit_seconds, dewarp=fn)
+                H = homography.fit(src_frames)
             else:
-                src_frames = frames
-            H = homography.fit(src_frames)
+                # pitch model at ~1 fps on the panned video; gate with player feet from the same frames
+                step = max(1, int(round(args.fps)))
+                H = homography.fit(frames[::step], dets_by_t=by_t)
+            homography.save_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"), H)
+        elif args.from_cache:
+            H = homography.load_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"))
+        shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
-        located = homography.locate_shots(cands, dets, H) if H else {}
+        located = {round(s["t"], 1): s["location"] for s in shot_cands}
 
         results = {
             "game_id": args.game_id, "video_id": main_video["id"], "model_version": MODEL_VERSION, "params": params,
             "frames": len(dets), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
-            "shot_candidates": cands, "shot_locations": located, "shape_snapshots": len(snaps),
+            "shot_candidates": shot_cands, "kick_candidates": kick_cands, "shot_locations": located,
+            "homography_frames": len(H), "shape_snapshots": len(snaps),
         }
         out_path = os.path.join(fetch.CACHE, f"{args.game_id}_results.json")
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -108,12 +116,12 @@ def main() -> int:
         print(f"results written to {out_path}")
         if args.dry_run:
             print(json.dumps({k: results[k] for k in ("frames", "team_stats")}, indent=1, default=float))
-            print(f"{len(cands)} shot candidates; dry run, nothing written to Supabase")
+            print(f"{len(shot_cands)} shot + {len(kick_cands)} kick candidates; {len(H)} homography frames; {len(snaps)} shape snapshots; dry run, nothing written")
             return 0
         db.write_results(
             game_id=args.game_id, run_id=run["id"], video_id=main_video["id"],
             team_stats=poss["team_stats"], buckets=poss["buckets"],
-            shot_tags=cands, shot_locations=located, snapshots=snaps,
+            shot_tags=shot_cands, kick_tags=kick_cands, shot_locations=located, snapshots=snaps,
             pitch=(game.get("pitch_length_m"), game.get("pitch_width_m")),
         )
         db.finish_run(run["id"], "done")

@@ -33,31 +33,68 @@ def available():
     return bool(weights_path())
 
 
-def fit(frames, min_points=5, conf_thresh=0.5):
-    """Returns {t: (H, confidence)} for frames where a homography could be estimated."""
+AREA_MIN_FRAC = float(os.environ.get("HOMOG_AREA_MIN", "0.03"))
+
+
+def _plausible(H, src, dst, feet):
+    """Gate a homography with checks that don't depend on the keypoint model being right:
+    the source points must span a real area (not a line), reprojection must be tight, and
+    the players' feet must land on the pitch. Returns (ok, confidence, detail)."""
+    import cv2
+    if len(src) < 5:
+        return False, 0.0, "few points"
+    hull = cv2.convexHull(src.astype(np.float32))
+    area = cv2.contourArea(hull)
+    if area < AREA_MIN_FRAC * (1280 * 720):
+        return False, 0.0, "points collinear / tiny span"
+    proj = cv2.perspectiveTransform(src.reshape(-1, 1, 2).astype(np.float32), H).reshape(-1, 2)
+    err = float(np.median(np.linalg.norm(proj - dst, axis=1)))
+    if err > 0.02:
+        return False, 0.0, f"reprojection {err:.3f}"
+    if len(feet) >= 4:
+        pf = cv2.perspectiveTransform(np.asarray(feet, np.float32).reshape(-1, 1, 2), H).reshape(-1, 2)
+        inside = float(((pf[:, 0] > -0.03) & (pf[:, 0] < 1.03) & (pf[:, 1] > -0.03) & (pf[:, 1] < 1.03)).mean())
+        if inside < 0.9:
+            return False, 0.0, f"feet inside {inside:.2f}"
+    else:
+        inside = 0.5   # not enough players to check; keep but don't trust much
+    conf = min(1.0, len(src) / 10) * (1 - err / 0.02) * inside
+    return True, float(conf), "ok"
+
+
+def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5):
+    """Returns {t: (H, confidence)} for frames whose homography passes the plausibility gate.
+    dets_by_t (optional): {round(t,1): FrameDet} so player feet can be used as the on-pitch check."""
     import cv2
     from ultralytics import YOLO
     model = YOLO(weights_path())
     out = {}
+    rejected = {}
     for f in frames:
-        r = model(f.img, verbose=False)[0]
-        if r.keypoints is None or len(r.keypoints) == 0:
+        r = model(f.img, verbose=False, imgsz=1280, conf=0.3)[0]
+        if r.keypoints is None or len(r.keypoints) == 0 or r.keypoints.conf is None:
             continue
         kp = r.keypoints.xy[0].cpu().numpy()
-        kc = r.keypoints.conf[0].cpu().numpy() if r.keypoints.conf is not None else np.ones(len(kp))
-        src, dst = [], []
-        for i, (p, c) in enumerate(zip(kp, kc)):
-            if c >= conf_thresh and i < len(PITCH_POINTS) and (p[0] > 0 or p[1] > 0):
-                src.append(p); dst.append(PITCH_POINTS[i])
-        if len(src) < min_points:
+        kc = r.keypoints.conf[0].cpu().numpy()
+        idx = [i for i in range(min(32, len(kp))) if kc[i] >= conf_thresh and (kp[i][0] > 0 or kp[i][1] > 0)]
+        if len(idx) < min_points:
             continue
-        H, mask = cv2.findHomography(np.array(src, np.float32), np.array(dst, np.float32), cv2.RANSAC, 0.02)
+        src = np.array([kp[i] for i in idx], np.float32)
+        dst = np.array([PITCH_POINTS[i] for i in idx], np.float32)
+        H, mask = cv2.findHomography(src, dst, cv2.RANSAC, 0.02)
         if H is None:
             continue
-        inliers = int(mask.sum())
-        conf = min(1.0, inliers / 8) * float(np.mean([c for c in kc if c >= conf_thresh]))
-        out[f.t] = (H, conf)
-    print(f"homography on {len(out)} / {len(frames)} frames")
+        inl = mask.ravel().astype(bool)
+        feet = []
+        d = dets_by_t.get(round(f.t, 1)) if dets_by_t else None
+        if d is not None:
+            feet = [((p[0] + p[2]) / 2, p[3]) for p in d.players]
+        ok, conf, why = _plausible(H, src[inl], dst[inl], feet)
+        if ok:
+            out[f.t] = (H, conf)
+        else:
+            rejected[why.split()[0]] = rejected.get(why.split()[0], 0) + 1
+    print(f"homography kept on {len(out)} / {len(frames)} frames; rejected: {rejected}")
     return out
 
 
@@ -86,3 +123,17 @@ def locate_shots(cands, dets, H, window_s=1.0, min_conf=0.5):
             # the reviewer can drag it. Flag it via confidence so the UI treats it as a proposal.
             out[round(c["t"], 1)] = {"x": x, "y": y, "confidence": round(best[1], 2)}
     return out
+
+
+def save_cache(path, H):
+    import json
+    with open(path, "w") as f:
+        json.dump({str(round(t, 3)): {"H": np.asarray(Hm).tolist(), "conf": conf} for t, (Hm, conf) in H.items()}, f)
+
+
+def load_cache(path):
+    import json
+    if not os.path.exists(path):
+        return {}
+    data = json.load(open(path))
+    return {float(t): (np.array(v["H"], np.float64), float(v["conf"])) for t, v in data.items()}
