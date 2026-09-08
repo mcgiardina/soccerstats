@@ -34,12 +34,17 @@ export default function Timeline({ video, duration, current, tags, onSeek, activ
     <div className="timeline" ref={ref} onPointerDown={handle} title={fmtClock(current)}>
       <div className="track" />
       <div className="played" style={{ width: pct(current) }} />
-      {periods.map((p) => (
-        <span key={p.l}>
-          <div className="period" style={{ left: pct(p.t) }} />
-          <div className="period-lbl" style={{ left: pct(p.t) }}>{p.l}</div>
-        </span>
-      ))}
+      {periods.map((p, i) => {
+        // Halftime and second-half kickoff are usually a minute apart: stagger labels that would collide.
+        const prev = periods[i - 1];
+        const crowded = prev && (p.t - prev.t) / D < 0.04;
+        return (
+          <span key={p.l}>
+            <div className="period" style={{ left: pct(p.t) }} />
+            <div className="period-lbl" style={{ left: pct(p.t), top: crowded ? 54 : undefined }}>{p.l}</div>
+          </span>
+        );
+      })}
       {tags.map((t) => (
         <div
           key={t.id}
