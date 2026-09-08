@@ -69,9 +69,9 @@ export default function TagList(p: Props) {
             <span className="lbl">
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
               {t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
-              {t.label ? <span> · {t.label}</span> : null}
+              {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}
               {shot?.xg != null ? <span className="muted small"> · xG {shot.xg.toFixed(2)}</span> : null}
-              {machine ? <span className="badge machine" style={{ marginLeft: 6 }}>machine{t.confidence != null ? ` ${Math.round(t.confidence * 100)}%` : ""}{t.confirmed === true ? " ✓" : t.confirmed === false ? " ✗" : ""}</span> : null}
+              {machine ? <span className="badge machine" style={{ marginLeft: 6 }} title="Machine proposal">≈{t.confidence != null ? ` ${Math.round(t.confidence * 100)}%` : ""}{t.confirmed === true ? " ✓" : t.confirmed === false ? " ✗" : ""}</span> : null}
             </span>
             <span className="actions">
               <button className="btn sm" onClick={() => copyLink(t)} title="Copy share link">🔗</button>
