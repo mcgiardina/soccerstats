@@ -131,13 +131,13 @@ create index if not exists buckets_game_idx on stat_buckets (game_id, bucket_sta
 -- ---------------------------------------------------------------------------
 
 create or replace function is_admin() returns boolean
-language sql stable as $$
+language sql stable set search_path = '' as $$
   select coalesce(auth.role() = 'authenticated', false)
 $$;
 
 create or replace function game_is_public(gid uuid) returns boolean
-language sql stable security definer as $$
-  select exists (select 1 from games g where g.id = gid and g.published)
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.games g where g.id = gid and g.published)
 $$;
 
 alter table games           enable row level security;
