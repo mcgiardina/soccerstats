@@ -3,7 +3,8 @@ import os
 import subprocess
 import sys
 
-CACHE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache")
+# Videos are big; keep them out of the repo (and out of Dropbox). Override with ANALYZER_CACHE.
+CACHE = os.environ.get("ANALYZER_CACHE") or os.path.expanduser("~/Library/Caches/match-film")
 
 
 def download(youtube_id: str) -> str:

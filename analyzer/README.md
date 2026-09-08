@@ -15,11 +15,11 @@ python analyze.py --game-id <uuid> --backend cloud   # same code, meant for a GP
 python analyze.py --game-id <uuid> --confirm-team    # re-pick which colour cluster is "us"
 python analyze.py --game-id <uuid> --dry-run --limit-seconds 180   # pilot: computes, writes nothing
 python analyze.py --game-id <uuid> --us-cluster A    # skip the "which cluster is us" prompt
-python results_to_sql.py cache/<uuid>_results.json <uuid> [--swap-teams] > seed.sql
+python results_to_sql.py ~/Library/Caches/match-film/<uuid>_results.json <uuid> [--swap-teams] > seed.sql
 ```
 
 `--dry-run` needs only `SUPABASE_ANON_KEY` (reads published games) and writes
-`cache/<game>_results.json` plus `cache/team_preview.jpg`. Look at the preview: A = yellow
+`<cache>/<game>_results.json` plus `<cache>/team_preview.jpg`. Look at the preview: A = yellow
 boxes, B = magenta. If the cluster you called "us" is actually the opponent, either rerun
 with the other `--us-cluster` or convert with `--swap-teams`.
 
@@ -35,7 +35,7 @@ Never runs automatically. The web app's "Queue analysis run" button only inserts
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).
 
 ## Stages
-1. `fetch.py` yt-dlp, 720p mp4, cached under `cache/`.
+1. `fetch.py` yt-dlp, 720p video-only mp4, cached under `~/Library/Caches/match-film/` (override with `ANALYZER_CACHE`). Keep it out of Dropbox.
 2. `video.py` frame sampling at 5 fps with hardware decode where OpenCV supports it.
 3. `detect.py` Ultralytics YOLO + ByteTrack. Roboflow football weights if `PLAYER_WEIGHTS` set, else COCO.
 4. `teams.py` KMeans(2) on torso colours. Aborts possession if clusters are not separable.

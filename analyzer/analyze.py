@@ -65,7 +65,7 @@ def main() -> int:
             "frames": len(frames), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
             "shot_candidates": cands, "shot_locations": located, "shape_snapshots": len(snaps),
         }
-        out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", f"{args.game_id}_results.json")
+        out_path = os.path.join(fetch.CACHE, f"{args.game_id}_results.json")
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "w") as f:
             json.dump(results, f, indent=1, default=float)

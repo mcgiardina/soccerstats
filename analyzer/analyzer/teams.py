@@ -9,6 +9,8 @@ from sklearn.cluster import KMeans
 
 from analyzer import db
 
+MERGE_DIST = 30.0   # feature-space distance below which two colour clusters are the same kit
+
 
 def torso_color(img, box):
     """Median LAB colour of the shirt, ignoring grass and shadow pixels. Returns [L, a, b] or None."""
@@ -31,16 +33,32 @@ def torso_color(img, box):
     return np.median(lab[keep], axis=0)
 
 
+def on_grass(img, box, min_green=0.45):
+    """True when the strip just below the box is mostly grass: a player on the pitch, not a
+    spectator under a tent or someone behind the fence."""
+    x1, y1, x2, y2 = [int(v) for v in box[:4]]
+    h, w = img.shape[:2]
+    cx = (x1 + x2) // 2
+    strip = img[min(h - 1, y2 + 1):min(h, y2 + 8), max(0, cx - max(4, (x2 - x1) // 3)):min(w, cx + max(4, (x2 - x1) // 3))]
+    if strip.size == 0:
+        return False
+    hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    green = (hsv[:, 0] > 30) & (hsv[:, 0] < 95) & (hsv[:, 1] > 40) & (hsv[:, 2] > 40)
+    return green.mean() >= min_green
+
+
 def _feat(c):
     # chroma dominates; lightness separates white from dark kits
-    return np.array([c[1] - 128, c[2] - 128, (c[0] - 128) * 0.6], dtype=np.float32)
+    # Lightness is down-weighted so sun/shade doesn't split one kit into two clusters,
+    # but still separates a white kit from a black one.
+    return np.array([c[1] - 128, c[2] - 128, (c[0] - 128) * 0.3], dtype=np.float32)
 
 
 def assign(dets, game_id, force_confirm=False, us_cluster=None):
     samples, refs = [], []
     for fi, d in enumerate(dets[::3]):
         for p in d.players:
-            if (p[3] - p[1]) < 28:   # fit only on players big enough to have a clean shirt crop
+            if (p[3] - p[1]) < 28 or not on_grass(d.img, p):   # big enough for a clean shirt crop, and on the pitch
                 continue
             c = torso_color(d.img, p)
             if c is not None:
@@ -49,16 +67,50 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
         print("too few player samples for team assignment", file=sys.stderr)
         return None
     feats = np.array(samples)
-    km = KMeans(n_clusters=2, n_init=10, random_state=0).fit(feats)
-    centers = km.cluster_centers_
+    # Four centres: two teams plus room for keepers / referee / stragglers. The two most
+    # populous clusters are the teams; everything else is "nobody".
+    km4 = KMeans(n_clusters=4, n_init=10, random_state=0).fit(feats)
+    raw_labels = km4.labels_.copy()
+    C = km4.cluster_centers_.copy()
+    counts = np.bincount(raw_labels, minlength=4).astype(float)
+    # Merge clusters whose centres are close (same kit under different light) into the bigger one.
+    group = list(range(4))
+    for _ in range(3):
+        best = None
+        for i in range(4):
+            for j in range(i + 1, 4):
+                if group[i] == group[j]:
+                    continue
+                dist = np.linalg.norm(C[i] - C[j])
+                if dist < MERGE_DIST and (best is None or dist < best[0]):
+                    best = (dist, i, j)
+        if best is None:
+            break
+        _, i, j = best
+        gi, gj = group[i], group[j]
+        keep, drop = (gi, gj) if counts[gi] >= counts[gj] else (gj, gi)
+        w = counts[keep] + counts[drop]
+        C[keep] = (C[keep] * counts[keep] + C[drop] * counts[drop]) / w
+        counts[keep], counts[drop] = w, 0
+        group = [keep if g == drop else g for g in group]
+        C[drop] = C[keep]
+    merged = np.array([group[l] for l in raw_labels])
+    sizes_all = np.bincount(merged, minlength=4)
+    top = np.argsort(sizes_all)[::-1][:2]
+    centers = C[top]
+    sizes = sizes_all[top]
     sep = np.linalg.norm(centers[0] - centers[1])
-    spread = np.mean([np.linalg.norm(feats[km.labels_ == k] - centers[k], axis=1).mean() for k in (0, 1)])
+    spread = np.mean([np.linalg.norm(feats[merged == k] - C[k], axis=1).mean() for k in top])
     ratio = sep / max(spread, 1e-6)
-    print(f"kit separation ratio {ratio:.2f} (need > 1.6)")
-    if ratio < 1.6:
+    print(f"kit clusters: raw sizes {np.bincount(raw_labels, minlength=4).tolist()}, merged {sizes_all.tolist()}, teams = {top.tolist()}, separation ratio {ratio:.2f} (need > 1.6)")
+    if ratio < 1.6 or sizes[1] < 0.25 * sizes[0]:
         return None
+    labels = np.full(len(feats), -1)
+    labels[merged == top[0]] = 0
+    labels[merged == top[1]] = 1
+    cluster_centers = C
 
-    _write_preview(dets, refs, km.labels_)
+    _write_preview(dets, refs, labels)
     if us_cluster is None and not force_confirm:
         us_cluster = db.get_team_choice(game_id)
     if us_cluster is None:
@@ -66,27 +118,36 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     # persist answer in this run's params happens through write_results caller; keep simple: stash on module
     assign.us_cluster = us_cluster
 
-    centers = km.cluster_centers_
+    team_of_cluster = {int(top[0]): 0, int(top[1]): 1}
+    for g_from, g_to in enumerate(group):        # merged clusters map to their surviving team
+        if g_to in team_of_cluster and g_from not in team_of_cluster:
+            team_of_cluster[g_from] = team_of_cluster[g_to]
+
     def label_of(img, box):
+        if not on_grass(img, box):
+            return None
         c = torso_color(img, box)
         if c is None:
             return None
         f = _feat(c)
-        d = np.linalg.norm(centers - f, axis=1)
-        # refuse ambiguous colours (referee, keeper, bystander): must be clearly closer to one centre
-        if d.min() > 0.8 * sep or d.max() - d.min() < 0.25 * sep:
+        d = np.linalg.norm(cluster_centers - f, axis=1)
+        k = int(d.argmin())
+        if k not in team_of_cluster:          # keeper / referee / straggler cluster
             return None
-        return "us" if int(d.argmin()) == us_cluster else "them"
+        if d[k] > 0.9 * sep:                  # far from every centre: don't guess
+            return None
+        return "us" if team_of_cluster[k] == us_cluster else "them"
 
     return label_of
 
 
-PREVIEW = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache", "team_preview.jpg")
+from analyzer.fetch import CACHE
+PREVIEW = os.path.join(CACHE, "team_preview.jpg")
 
 
 def _write_preview(dets, refs, labels):
     """Preview frame with cluster-coloured boxes: A = yellow (cluster 0), B = magenta (cluster 1)."""
-    idx = {r: l for r, l in zip(refs, labels)}
+    idx = {r: l for r, l in zip(refs, labels) if l >= 0}
     # frame (among the sampled ones) with the most labelled players
     def score(i):
         return sum(1 for p in dets[i].players if (i, p[4]) in idx)

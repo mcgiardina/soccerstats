@@ -6,7 +6,7 @@ from analyzer.video import match_period, match_seconds
 BUCKET_S = 300
 
 
-def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, max_dist_px=90):
+def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, min_hold_s=2.0, max_dist_px=90):
     raw = []  # (t, 'us'|'them'|None)
     for d in dets:
         if d.ball is None or not d.players:
@@ -26,21 +26,39 @@ def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, max_dist_px=90):
     # majority vote over a sliding window
     win = max(1, int(round(smooth_s * fps)))
     teams = [x[1] for x in raw]
-    smoothed = []
+    voted = []
     for i in range(len(teams)):
         lo, hi = max(0, i - win // 2), min(len(teams), i + win // 2 + 1)
         w = [t for t in teams[lo:hi] if t]
         if not w:
-            smoothed.append(None); continue
-        smoothed.append(max(set(w), key=w.count))
+            voted.append(None); continue
+        voted.append(max(set(w), key=w.count))
+
+    # Hysteresis: the holder only changes once the other team has been attributed for a
+    # sustained stretch. Brief flickers while the ball is between players are not turnovers.
+    hold = max(2, int(round(min_hold_s * fps)))
+    smoothed = []
+    holder, streak = None, 0
+    for t in voted:
+        if t is None:
+            smoothed.append(holder); continue
+        if t == holder:
+            streak = 0
+        else:
+            streak += 1
+            if holder is None or streak >= hold:
+                holder, streak = t, 0
+        smoothed.append(holder)
 
     # per period + full, only frames inside a half
     tallies = {"full": {"us": 0, "them": 0, "to_us": 0, "to_them": 0}, "h1": {"us": 0, "them": 0, "to_us": 0, "to_them": 0}, "h2": {"us": 0, "them": 0, "to_us": 0, "to_them": 0}}
     buckets = {}
     prev = None
-    for (t, _), team in zip(raw, smoothed):
+    for (t, _), seen, team in zip(raw, voted, smoothed):
         per = match_period(offsets, t)
-        if per is None or team is None:
+        # Only frames where the ball was actually seen count toward the share; the carried
+        # holder is used for labelling but never inflates the denominator.
+        if per is None or team is None or seen is None:
             continue
         ms = match_seconds(offsets, t)
         bk = int(ms // BUCKET_S) * BUCKET_S
