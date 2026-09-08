@@ -1,0 +1,92 @@
+"""Supabase reads/writes. Uses the service role key; never runs in a browser."""
+import os
+from datetime import datetime, timezone
+
+from supabase import create_client
+
+_client = None
+
+
+def client():
+    global _client
+    if _client is None:
+        url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
+        if not url or not key:
+            raise SystemExit("Set SUPABASE_URL and SUPABASE_SERVICE_KEY in analyzer/.env")
+        _client = create_client(url, key)
+    return _client
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def get_game(game_id):
+    return client().table("games").select("*").eq("id", game_id).single().execute().data
+
+
+def get_videos(game_id):
+    return client().table("videos").select("*").eq("game_id", game_id).order("created_at").execute().data
+
+
+def claim_run(game_id, video_id, model_version, params):
+    """Take the oldest queued run for this game, or create one. Never auto-triggered."""
+    q = client().table("stat_runs").select("*").eq("game_id", game_id).eq("status", "queued").order("created_at").limit(1).execute().data
+    patch = {"status": "running", "started_at": now(), "model_version": model_version, "params": params, "video_id": video_id}
+    if q:
+        return client().table("stat_runs").update(patch).eq("id", q[0]["id"]).select().single().execute().data
+    return client().table("stat_runs").insert({"game_id": game_id, **patch}).select().single().execute().data
+
+
+def finish_run(run_id, status, error=None):
+    client().table("stat_runs").update({"status": status, "finished_at": now(), "error": error}).eq("id", run_id).execute()
+
+
+def get_team_choice(game_id):
+    """Persisted 'which cluster is us' answer lives in the run params of the last done run."""
+    rows = client().table("stat_runs").select("params").eq("game_id", game_id).eq("status", "done").order("finished_at", desc=True).limit(1).execute().data
+    return (rows[0]["params"] or {}).get("us_cluster") if rows else None
+
+
+def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch):
+    c = client()
+    # Replace prior machine stats for this game; human_adjusted rows are untouched.
+    c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
+    if team_stats:
+        c.table("team_stats").insert([{**r, "game_id": game_id, "run_id": run_id, "source": "machine"} for r in team_stats]).execute()
+    c.table("stat_buckets").delete().eq("game_id", game_id).execute()
+    if buckets:
+        c.table("stat_buckets").insert([{**b, "game_id": game_id, "run_id": run_id} for b in buckets]).execute()
+
+    # Machine shot tags: only remove earlier unreviewed machine tags. Reviewed ones (confirmed
+    # true/false) are human decisions and stay.
+    c.table("tags").delete().eq("game_id", game_id).eq("source", "machine").is_("confirmed", "null").execute()
+    existing = c.table("tags").select("t_seconds,type").eq("game_id", game_id).execute().data
+    taken = [float(t["t_seconds"]) for t in existing if t["type"] in ("shot", "goal", "penalty")]
+    rows = []
+    for s in shot_tags:
+        # Don't propose a shot within 4 s of one a human already tagged.
+        if any(abs(s["t"] - t) < 4 for t in taken):
+            continue
+        rows.append({"game_id": game_id, "video_id": video_id, "t_seconds": round(s["t"], 1), "type": "shot",
+                     "team": s.get("team"), "source": "machine", "confidence": round(float(s["confidence"]), 3),
+                     "label": "machine shot candidate"})
+    inserted = c.table("tags").insert(rows).select().execute().data if rows else []
+    # Machine locations go on the shots table as proposals, marked 'machine'.
+    from analyzer.xg import compute_xg, MODEL_VERSION
+    L = float(pitch[0] or 105); W = float(pitch[1] or 68)
+    for tag in inserted:
+        loc = shot_locations.get(round(float(tag["t_seconds"]), 1))
+        if not loc:
+            continue
+        c.table("shots").upsert({
+            "game_id": game_id, "tag_id": tag["id"], "team": tag["team"],
+            "pitch_x": loc["x"], "pitch_y": loc["y"], "location_source": "machine",
+            "location_confidence": loc["confidence"], "is_goal": False,
+            "xg": compute_xg(loc["x"], loc["y"], L, W), "xg_model_version": MODEL_VERSION,
+        }, on_conflict="tag_id").execute()
+
+    c.table("shape_snapshots").delete().eq("game_id", game_id).execute()
+    if snapshots:
+        for i in range(0, len(snapshots), 200):
+            c.table("shape_snapshots").insert([{**s, "game_id": game_id, "run_id": run_id} for s in snapshots[i:i + 200]]).execute()
