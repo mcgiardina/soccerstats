@@ -9,7 +9,9 @@ from sklearn.cluster import KMeans
 
 from analyzer import db
 
-MERGE_DIST = 30.0   # feature-space distance below which two colour clusters are the same kit
+NEUTRAL_CHROMA = 9.0      # below this normalised chroma a cluster is white/grey/black
+HUE_GAP_DEG = 30.0        # chromatic clusters within this hue angle are the same kit
+NEUTRAL_LIGHT_GAP = 12.0  # neutral clusters closer than this in damped lightness are the same kit
 
 
 def torso_color(img, box):
@@ -73,34 +75,23 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     raw_labels = km4.labels_.copy()
     C = km4.cluster_centers_.copy()
     counts = np.bincount(raw_labels, minlength=4).astype(float)
-    # Merge clusters whose centres are close (same kit under different light) into the bigger one.
+    # Group clusters that are the same kit under different light. Raw centres are kept for
+    # assignment; only the group -> team mapping is merged.
     group = list(range(4))
-    for _ in range(3):
-        best = None
-        for i in range(4):
-            for j in range(i + 1, 4):
-                if group[i] == group[j]:
-                    continue
-                dist = np.linalg.norm(C[i] - C[j])
-                if dist < MERGE_DIST and (best is None or dist < best[0]):
-                    best = (dist, i, j)
-        if best is None:
-            break
-        _, i, j = best
-        gi, gj = group[i], group[j]
-        keep, drop = (gi, gj) if counts[gi] >= counts[gj] else (gj, gi)
-        w = counts[keep] + counts[drop]
-        C[keep] = (C[keep] * counts[keep] + C[drop] * counts[drop]) / w
-        counts[keep], counts[drop] = w, 0
-        group = [keep if g == drop else g for g in group]
-        C[drop] = C[keep]
+    for i in range(4):
+        for j in range(i + 1, 4):
+            if group[i] != group[j] and _same_kit(C[i], C[j]):
+                gi, gj = group[i], group[j]
+                keep, drop = (gi, gj) if counts[gi] >= counts[gj] else (gj, gi)
+                counts[keep] += counts[drop]; counts[drop] = 0
+                group = [keep if g == drop else g for g in group]
     merged = np.array([group[l] for l in raw_labels])
     sizes_all = np.bincount(merged, minlength=4)
     top = np.argsort(sizes_all)[::-1][:2]
-    centers = C[top]
+    centers = np.array([feats[merged == k].mean(axis=0) for k in top])
     sizes = sizes_all[top]
     sep = np.linalg.norm(centers[0] - centers[1])
-    spread = np.mean([np.linalg.norm(feats[merged == k] - C[k], axis=1).mean() for k in top])
+    spread = np.mean([np.linalg.norm(feats[raw_labels == k] - C[k], axis=1).mean() for k in range(4) if group[k] in top])
     ratio = sep / max(spread, 1e-6)
     print(f"kit clusters: raw sizes {np.bincount(raw_labels, minlength=4).tolist()}, merged {sizes_all.tolist()}, teams = {top.tolist()}, separation ratio {ratio:.2f} (need > 1.6)")
     if ratio < 1.6 or sizes[1] < 0.25 * sizes[0]:

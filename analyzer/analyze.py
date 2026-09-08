@@ -26,6 +26,7 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="Compute everything, write nothing to Supabase; dump results JSON")
     ap.add_argument("--us-cluster", choices=["A", "B"], default=None, help="Which kit-colour cluster is us (skips the prompt)")
     ap.add_argument("--from-cache", action="store_true", help="Reuse cached detections + team labels; skip download/detect")
+    ap.add_argument("--relabel", action="store_true", help="With --from-cache: redo team assignment (re-decodes frames, no re-detection)")
     args = ap.parse_args()
 
     game = db.get_game(args.game_id)
@@ -45,6 +46,23 @@ def main() -> int:
         if args.from_cache and os.path.exists(cache_path):
             args.fps, dets = detect.load_cache(cache_path)
             frames, assign, path = [], None, None
+            if args.relabel:
+                path = fetch.download(main_video["youtube_id"])
+                frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
+                if len(frames) != len(dets):
+                    raise RuntimeError(f"frame count mismatch: {len(frames)} sampled vs {len(dets)} cached")
+                for f, d in zip(frames, dets):
+                    d.img = f.img
+                us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
+                assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team, us_cluster=us_cluster)
+                if assign is None:
+                    raise RuntimeError("Kit colours too similar to separate teams; possession not reported.")
+                for d in dets:
+                    d.labels = [assign(d.img, p) for p in d.players]
+                detect.save_cache(cache_path, dets, args.fps)
+                for d in dets:
+                    d.img = None
+                frames = []
         else:
             path = fetch.download(main_video["youtube_id"])
             frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
