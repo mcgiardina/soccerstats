@@ -105,3 +105,37 @@ def classify(cands, dets, H, window_s=1.0, min_conf=0.4):
             kicks.append({**c, "confidence": round(c["confidence"] * 0.6, 3), "location": loc})
     print(f"{len(shots)} shot candidates with geometry, {len(kicks)} kicks")
     return shots, kicks
+
+
+def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, approach_frac=0.35):
+    """Fallback when no pitch geometry is available: a kick becomes a shot candidate if a
+    goalkeeper is visible around the kick and the ball closes most of the distance toward
+    that keeper in the following second or two. Keepers only stand in one place, so
+    "toward the keeper" is a fair proxy for "toward the goal" on panned footage.
+    Returns (shots, remaining_kicks)."""
+    ts = [d.t for d in dets]
+    shots, rest = [], []
+    for c in kicks:
+        t_kick = c["t"] + 1.0
+        i0 = max(0, int(np.searchsorted(ts, t_kick - 0.3)))
+        i1 = min(len(dets), int(np.searchsorted(ts, t_kick + window_s)))
+        win = dets[i0:i1]
+        keepers = [(d.t, k) for d in win for k in getattr(d, "keepers", []) or []]
+        balls = [(d.t, d.ball) for d in win if d.ball]
+        if not keepers or len(balls) < 3:
+            rest.append(c); continue
+        # keeper position: median of detections in the window (the camera pans, so tolerate drift)
+        kx = float(np.median([(k[0] + k[2]) / 2 for _, k in keepers]))
+        ky = float(np.median([k[3] for _, k in keepers]))
+        d_start = np.hypot(balls[0][1][0] - kx, balls[0][1][1] - ky)
+        d_min = min(np.hypot(b[0] - kx, b[1] - ky) for _, b in balls[1:])
+        if d_start < 40:
+            rest.append(c); continue                      # keeper already had it: a goal kick / punt
+        closed = 1.0 - d_min / d_start
+        if closed >= approach_frac:
+            conf = round(min(0.95, 0.45 + 0.4 * closed), 3)
+            shots.append({**c, "confidence": conf, "keeper_approach": round(closed, 2)})
+        else:
+            rest.append(c)
+    print(f"{len(shots)} shot candidates via keeper approach, {len(rest)} kicks remain")
+    return shots, rest

@@ -118,6 +118,7 @@ def save_cache(path, dets, fps):
             "t": round(d.t, 3),
             "ball": [round(float(d.ball[0]), 1), round(float(d.ball[1]), 1)] if d.ball else None,
             "players": [[round(float(p[0]), 1), round(float(p[1]), 1), round(float(p[2]), 1), round(float(p[3]), 1)] for p in d.players],
+            "keepers": [[round(float(p[0]), 1), round(float(p[1]), 1), round(float(p[2]), 1), round(float(p[3]), 1)] for p in d.keepers],
             "labels": d.labels,
         })
     with gzip.open(path, "wt") as f:
@@ -132,7 +133,8 @@ def load_cache(path):
     size = tuple(data["size"]) if data.get("size") else None
     for r in data["frames"]:
         players = [(b[0], b[1], b[2], b[3], i) for i, b in enumerate(r["players"])]
-        dets.append(FrameDet(t=r["t"], players=players, ball=tuple(r["ball"]) if r["ball"] else None,
+        keepers = [(b[0], b[1], b[2], b[3], i) for i, b in enumerate(r.get("keepers", []))]
+        dets.append(FrameDet(t=r["t"], players=players, keepers=keepers, ball=tuple(r["ball"]) if r["ball"] else None,
                              labels=r["labels"], size=size))
     print(f"loaded {len(dets)} cached frames from {path}")
     return data["fps"], dets

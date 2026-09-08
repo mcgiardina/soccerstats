@@ -109,6 +109,8 @@ def main() -> int:
         elif args.from_cache:
             H = homography.load_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"))
         shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
+        more, kick_cands = shots.classify_by_keeper(kick_cands, dets, fps=args.fps)
+        shot_cands = sorted(shot_cands + more, key=lambda c: c["t"])
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = {round(s["t"], 1): s["location"] for s in shot_cands}
 
