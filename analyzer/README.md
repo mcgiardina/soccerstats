@@ -43,6 +43,14 @@ sample games in Sept 2026:
 Never runs automatically. The web app's "Queue analysis run" button only inserts a
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).
 
+## Better models (recommended, no account needed)
+Roboflow publishes pre-trained football weights in the MIT-licensed `roboflow/sports` repo:
+a player/goalkeeper/referee/ball detector, a ball-only detector, and the 32-landmark pitch
+keypoint model. `./get_weights.sh` downloads the same Google Drive files their own setup
+script uses into `~/Library/Caches/match-film/weights/`, and the analyzer picks them up
+automatically. This is what unlocks referee/keeper exclusion by class, real shot detection
+(ball toward the goal region), and machine shot locations + shape snapshots via homography.
+
 ## Stages
 1. `fetch.py` yt-dlp, 720p video-only mp4, cached under `~/Library/Caches/match-film/` (override with `ANALYZER_CACHE`). Keep it out of Dropbox.
 2. `video.py` frame sampling at 5 fps with hardware decode where OpenCV supports it.

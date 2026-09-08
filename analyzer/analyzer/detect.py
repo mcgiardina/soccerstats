@@ -23,12 +23,25 @@ class FrameDet:
     size: tuple = None                            # (h, w)
 
 
+WEIGHTS_DIR = os.path.join(os.environ.get("ANALYZER_CACHE") or os.path.expanduser("~/Library/Caches/match-film"), "weights")
+
+
+def find_weights(env_key: str, filename: str):
+    """Env var wins; else the file downloaded by get_weights.sh; else None."""
+    if os.environ.get(env_key):
+        return os.environ[env_key]
+    p = os.path.join(WEIGHTS_DIR, filename)
+    return p if os.path.exists(p) else None
+
+
 def _model(backend: str):
     from ultralytics import YOLO
-    weights = os.environ.get("PLAYER_WEIGHTS") or ("yolo11m.pt" if backend == "cloud" else "yolo11s.pt")
+    football = find_weights("PLAYER_WEIGHTS", "football-player-detection.pt")
+    weights = football or ("yolo11m.pt" if backend == "cloud" else "yolo11s.pt")
+    print(f"player model: {weights}")
     device = "mps" if backend == "local" else 0
     m = YOLO(weights)
-    return m, device, bool(os.environ.get("PLAYER_WEIGHTS"))
+    return m, device, bool(football)
 
 
 # The ball is tiny at 720p. Run the net at 1280 and keep a low threshold for the ball only;
