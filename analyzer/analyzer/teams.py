@@ -11,38 +11,44 @@ from analyzer import db
 
 
 def torso_color(img, box):
+    """Median LAB colour of the shirt, ignoring grass and shadow pixels. Returns [L, a, b] or None."""
     x1, y1, x2, y2 = [int(v) for v in box[:4]]
-    h = y2 - y1
-    w = x2 - x1
-    if h < 12 or w < 6:
+    h, w = y2 - y1, x2 - x1
+    if h < 14 or w < 5:
         return None
-    # upper-middle of the box: shirt, avoiding head and legs
-    ty1, ty2 = y1 + int(h * 0.2), y1 + int(h * 0.55)
-    tx1, tx2 = x1 + int(w * 0.2), x2 - int(w * 0.2)
+    ty1, ty2 = y1 + int(h * 0.18), y1 + int(h * 0.50)
+    tx1, tx2 = x1 + int(w * 0.25), x2 - int(w * 0.25)
     crop = img[max(0, ty1):ty2, max(0, tx1):tx2]
     if crop.size == 0:
         return None
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(np.float32)
-    # drop very dark / very bright pixels (shadows, glare)
-    m = (hsv[:, 2] > 40) & (hsv[:, 2] < 240)
-    if m.sum() < 10:
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB).reshape(-1, 3).astype(np.float32)
+    grass = (hsv[:, 0] > 30) & (hsv[:, 0] < 95) & (hsv[:, 1] > 50)
+    dark = hsv[:, 2] < 45
+    keep = ~grass & ~dark
+    if keep.sum() < 8:
         return None
-    return np.median(hsv[m], axis=0)
+    return np.median(lab[keep], axis=0)
+
+
+def _feat(c):
+    # chroma dominates; lightness separates white from dark kits
+    return np.array([c[1] - 128, c[2] - 128, (c[0] - 128) * 0.6], dtype=np.float32)
 
 
 def assign(dets, game_id, force_confirm=False, us_cluster=None):
     samples, refs = [], []
     for fi, d in enumerate(dets[::3]):
         for p in d.players:
+            if (p[3] - p[1]) < 28:   # fit only on players big enough to have a clean shirt crop
+                continue
             c = torso_color(d.img, p)
             if c is not None:
-                samples.append(c); refs.append((fi * 3, p[4]))
+                samples.append(_feat(c)); refs.append((fi * 3, p[4]))
     if len(samples) < 200:
         print("too few player samples for team assignment", file=sys.stderr)
         return None
-    X = np.array(samples)
-    # weight hue on the circle so red/orange don't split
-    feats = np.column_stack([np.cos(np.radians(X[:, 0] * 2)) * X[:, 1], np.sin(np.radians(X[:, 0] * 2)) * X[:, 1], X[:, 2] * 0.5])
+    feats = np.array(samples)
     km = KMeans(n_clusters=2, n_init=10, random_state=0).fit(feats)
     centers = km.cluster_centers_
     sep = np.linalg.norm(centers[0] - centers[1])
@@ -60,13 +66,17 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     # persist answer in this run's params happens through write_results caller; keep simple: stash on module
     assign.us_cluster = us_cluster
 
+    centers = km.cluster_centers_
     def label_of(img, box):
         c = torso_color(img, box)
         if c is None:
             return None
-        f = np.array([[np.cos(np.radians(c[0] * 2)) * c[1], np.sin(np.radians(c[0] * 2)) * c[1], c[2] * 0.5]])
-        k = int(km.predict(f)[0])
-        return "us" if k == us_cluster else "them"
+        f = _feat(c)
+        d = np.linalg.norm(centers - f, axis=1)
+        # refuse ambiguous colours (referee, keeper, bystander): must be clearly closer to one centre
+        if d.min() > 0.8 * sep or d.max() - d.min() < 0.25 * sep:
+            return None
+        return "us" if int(d.argmin()) == us_cluster else "them"
 
     return label_of
 

@@ -1,5 +1,5 @@
-"""YOLO detection + ByteTrack. Tracker IDs are used only within this process for smoothing
-and are never written to the database."""
+"""YOLO detection. No tracker: ByteTrack drops sub-0.25 detections, which is exactly where the
+tiny ball lives. Per-frame player ids are just list indices and are never written anywhere."""
 import os
 from dataclasses import dataclass, field
 
@@ -29,20 +29,30 @@ def _model(backend: str):
     return m, device, bool(os.environ.get("PLAYER_WEIGHTS"))
 
 
+# The ball is tiny at 720p. Run the net at 1280 and keep a low threshold for the ball only;
+# people need a higher one or spectators and signage creep in.
+IMGSZ = 1280
+BALL_CONF = 0.10
+PERSON_CONF = 0.35
+
+
 def run(frames, backend="local"):
     model, device, football = _model(backend)
     out = []
     for f in tqdm(frames, desc="detect"):
-        res = model.track(f.img, persist=True, tracker="bytetrack.yaml", device=device, verbose=False, conf=0.25)[0]
+        res = model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ)[0]
         fd = FrameDet(t=f.t, img=f.img)
         if res.boxes is None:
             out.append(fd); continue
         xyxy = res.boxes.xyxy.cpu().numpy()
         cls = res.boxes.cls.cpu().numpy().astype(int)
-        ids = res.boxes.id.cpu().numpy().astype(int) if res.boxes.id is not None else np.full(len(cls), -1)
+        ids = np.arange(len(cls))
         conf = res.boxes.conf.cpu().numpy()
         for box, c, tid, cf in zip(xyxy, cls, ids, conf):
             x1, y1, x2, y2 = box
+            is_ball = c == (RF_BALL if football else COCO_BALL)
+            if not is_ball and cf < PERSON_CONF:
+                continue
             if football:
                 if c == RF_BALL:
                     if fd.ball is None or cf > fd.ball[2]:
