@@ -29,10 +29,26 @@ for b in r["buckets"]:
     tu, tt = (b["turnovers_them"], b["turnovers_us"]) if swap else (b["turnovers_us"], b["turnovers_them"])
     out.append(f"insert into stat_buckets (game_id, run_id, bucket_start_s, bucket_end_s, possession_us_pct, ball_frames, turnovers_us, turnovers_them) values "
                f"('{game_id}', '{run_id}', {b['bucket_start_s']}, {b['bucket_end_s']}, {p}, {b['ball_frames']}, {tu}, {tt});")
-cands = sorted(r["shot_candidates"], key=lambda c: -c["confidence"])
+from analyzer.xg import compute_xg, MODEL_VERSION
+L, W = float(r.get("pitch_length_m") or 105), float(r.get("pitch_width_m") or 68)
+
+# Shot candidates (geometry-backed) become machine shot tags with a machine-located shot row.
+shots_ = sorted(r.get("shot_candidates", []), key=lambda c: c["t"])
+for c in shots_:
+    tid = str(uuid.uuid4())
+    out.append(f"insert into tags (id, game_id, video_id, t_seconds, type, team, label, source, confidence) values "
+               f"('{tid}', '{game_id}', '{video_id}', {round(c['t'], 1)}, 'shot', {team(c.get('team'))}, 'machine shot candidate', 'machine', {round(c['confidence'], 3)});")
+    loc = c.get("location")
+    if loc:
+        xg = compute_xg(loc["x"], loc["y"], L, W)
+        out.append(f"insert into shots (game_id, tag_id, team, pitch_x, pitch_y, location_source, location_confidence, is_goal, xg, xg_model_version) values "
+                   f"('{game_id}', '{tid}', {team(c.get('team'))}, {round(loc['x'], 3)}, {round(loc['y'], 3)}, 'machine', {loc['confidence']}, false, {xg}, '{MODEL_VERSION}');")
+
+# Kick candidates stay plain tags so a reviewer can promote or reject them.
+kicks = sorted(r.get("kick_candidates", []), key=lambda c: -c["confidence"])
 if top_n:
-    cands = sorted(cands[:top_n], key=lambda c: c["t"])
-for c in cands:
+    kicks = sorted(kicks[:top_n], key=lambda c: c["t"])
+for c in kicks:
     out.append(f"insert into tags (game_id, video_id, t_seconds, type, team, label, source, confidence) values "
-               f"('{game_id}', '{video_id}', {round(c['t'], 1)}, 'shot', {team(c.get('team'))}, 'machine shot candidate', 'machine', {round(c['confidence'], 3)});")
+               f"('{game_id}', '{video_id}', {round(c['t'], 1)}, 'shot', {team(c.get('team'))}, 'machine kick candidate', 'machine', {round(c['confidence'], 3)});")
 print("\n".join(out))
