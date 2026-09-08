@@ -162,7 +162,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const scoreText = usFirst ? `${summary.us.goals}–${summary.them.goals}` : `${summary.them.goals}–${summary.us.goals}`;
 
   return (
-    <div className="page">
+    <div className="page game-page">
       {toast ? <div className="toast">{toast}</div> : null}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: ".5rem" }}>
         <div>
@@ -179,8 +179,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         </div>
       </div>
 
-      <div className="grid-2">
-        <div>
+      <div className="game-layout">
+        <div className="game-main">
           {video ? (
             <>
               <YouTubePlayer ref={player} youtubeId={video.youtube_id} startAt={startAt} onTime={setCurrent} onDuration={setDuration} />
@@ -190,14 +190,15 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                 <a href={watchUrl(video.youtube_id, current)} target="_blank" rel="noreferrer">Open on YouTube ↗</a>
               </div>
               {admin ? (
-                <div className="card" style={{ marginTop: ".75rem" }}>
-                  <div className="keys">
+                <details className="keys-details">
+                  <summary>Tagging keys</summary>
+                  <div className="keys" style={{ marginTop: ".4rem" }}>
                     {HOTKEYS.map((h) => <span key={h.key}><kbd>{h.key}</kbd> <span className="tiny">{TAG_LABELS[h.type]}</span></span>)}
                     <span><kbd>⇧</kbd> <span className="tiny">+key = them</span></span>
                     <span><kbd>space</kbd> <span className="tiny">play/pause</span></span>
                     <span><kbd>←</kbd><kbd>→</kbd> <span className="tiny">±5s (⇧ ±30s)</span></span>
                   </div>
-                </div>
+                </details>
               ) : null}
             </>
           ) : (
@@ -210,30 +211,10 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               ) : <p className="muted">Film hasn't been attached to this game.</p>}
             </div>
           )}
-
-          <div className="card" style={{ marginTop: "1rem" }}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>Stats</h2>
-              <div className="row" style={{ gap: ".25rem" }}>
-                {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={`btn sm ${period === p ? "primary" : ""}`} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
-              </div>
-            </div>
-            <StatsPanel s={summary} />
-            {b.buckets.length ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} /></div> : null}
-          </div>
-
-          <div className="card">
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <h2 style={{ margin: 0 }}>Shot map</h2>
-              {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
-            </div>
-            <PitchMap shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(Math.max(0, t.t_seconds - 3)); }} />
-            <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. We attack →.</div>
-          </div>
         </div>
 
-        <div>
-          <div className="card">
+        <aside className="game-side">
+          <div className="card side-card">
             <div className="row" style={{ gap: ".25rem", marginBottom: ".5rem" }}>
               <button className={`btn sm ${panel === "tags" ? "primary" : ""}`} onClick={() => setPanel("tags")}>Tags ({visibleTags.length})</button>
               {admin && video ? <button className={`btn sm ${panel === "periods" ? "primary" : ""}`} onClick={() => setPanel("periods")}>Periods</button> : null}
@@ -241,45 +222,69 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {admin ? <button className={`btn sm ${panel === "analysis" ? "primary" : ""}`} onClick={() => setPanel("analysis")}>Analysis</button> : null}
               {b.shapes.length ? <button className={`btn sm ${panel === "shape" ? "primary" : ""}`} onClick={() => setPanel("shape")}>Shape</button> : null}
             </div>
-
-            {panel === "tags" ? (
-              <>
-                {admin && b.tags.some((t) => t.source === "machine" && t.confirmed == null) ? <div className="notice">Machine proposals need review. ✓ accepts, ✗ rejects. Only confirmed ones show to parents.</div> : null}
-                <TagList tags={visibleTags} shots={b.shots} video={video} gameId={g.id} isAdmin={admin} currentTime={current} onSeek={seek}
-                  onEdit={(t) => setEditing({ tag: t, quick: false, isNew: false })} onDelete={removeTag} onPlace={setPlacing} onReview={review} onToast={showToast} />
-                {admin && video ? <button className="btn sm" style={{ marginTop: ".5rem" }} onClick={() => setEditing({ tag: { t_seconds: Math.round(current), type: "note", team: "us" }, quick: false, isNew: true })}>+ Add tag at {toMatchTime(video, current).label}</button> : null}
-              </>
-            ) : null}
-
-            {panel === "periods" && video ? <PeriodEditor video={video} currentTime={current} onChange={updatePeriods} onSeek={seek} /> : null}
-            {panel === "chapters" && video ? <ChaptersExport video={video} tags={b.tags} /> : null}
-            {panel === "shape" ? (
-              <div>
-                <ShapePlot snapshots={b.shapes} team="us" period={period} />
-                <ShapePlot snapshots={b.shapes} team="them" period={period} />
-              </div>
-            ) : null}
-            {panel === "analysis" ? (
-              <div>
-                <p className="small muted">Analysis runs on your Mac, never automatically. Queue a run here, then execute it:</p>
-                <pre className="chapters">cd analyzer && python analyze.py --game-id {g.id}</pre>
-                <button className="btn primary sm" disabled={!video} onClick={queueRun}>Queue analysis run</button>
-                {b.runs.length ? (
-                  <div style={{ marginTop: ".75rem" }}>
-                    {b.runs.map((r) => (
-                      <div key={r.id} className="tag-row small">
-                        <span className="mono">{r.id.slice(0, 8)}</span>
-                        <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
-                        <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.error ? ` · ${r.error}` : ""}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {b.teamStats.some((s) => s.source === "machine") ? <div className="notice info" style={{ marginTop: ".75rem" }}>Machine possession and turnover numbers show with ≈. If you disagree after watching, the numbers stay a proposal; there's no per-player data to correct.</div> : null}
-              </div>
-            ) : null}
+            <div className="side-scroll">
+              {panel === "tags" ? (
+                <>
+                  {admin && b.tags.some((t) => t.source === "machine" && t.confirmed == null) ? <div className="notice">Machine proposals need review. ✓ accepts, ✗ rejects. Only confirmed ones show to parents.</div> : null}
+                  <TagList tags={visibleTags} shots={b.shots} video={video} gameId={g.id} isAdmin={admin} currentTime={current} onSeek={seek}
+                    onEdit={(t) => setEditing({ tag: t, quick: false, isNew: false })} onDelete={removeTag} onPlace={setPlacing} onReview={review} onToast={showToast} />
+                  {admin && video ? <button className="btn sm" style={{ marginTop: ".5rem" }} onClick={() => setEditing({ tag: { t_seconds: Math.round(current), type: "note", team: "us" }, quick: false, isNew: true })}>+ Add tag at {toMatchTime(video, current).label}</button> : null}
+                </>
+              ) : null}
+              {panel === "periods" && video ? <PeriodEditor video={video} currentTime={current} onChange={updatePeriods} onSeek={seek} /> : null}
+              {panel === "chapters" && video ? <ChaptersExport video={video} tags={b.tags} /> : null}
+              {panel === "shape" ? (
+                <div>
+                  <ShapePlot snapshots={b.shapes} team="us" period={period} />
+                  <ShapePlot snapshots={b.shapes} team="them" period={period} />
+                </div>
+              ) : null}
+              {panel === "analysis" ? (
+                <div>
+                  <p className="small muted">Analysis runs on your Mac, never automatically. Queue a run here, then execute it:</p>
+                  <pre className="chapters">cd analyzer && python analyze.py --game-id {g.id}</pre>
+                  <button className="btn primary sm" disabled={!video} onClick={queueRun}>Queue analysis run</button>
+                  {b.runs.length ? (
+                    <div style={{ marginTop: ".75rem" }}>
+                      {b.runs.map((r) => (
+                        <div key={r.id} className="tag-row small">
+                          <span className="mono">{r.id.slice(0, 8)}</span>
+                          <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
+                          <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.error ? ` · ${r.error}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {b.teamStats.some((s) => s.source === "machine") ? <div className="notice info" style={{ marginTop: ".75rem" }}>Machine possession and turnover numbers show with ≈. If you disagree after watching, the numbers stay a proposal; there's no per-player data to correct.</div> : null}
+                </div>
+              ) : null}
+            </div>
           </div>
+        </aside>
+      </div>
 
+      <div className="below">
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>Stats</h2>
+            <div className="row" style={{ gap: ".25rem" }}>
+              {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={`btn sm ${period === p ? "primary" : ""}`} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
+            </div>
+          </div>
+          <StatsPanel s={summary} />
+          {b.buckets.length ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} /></div> : null}
+        </div>
+
+        <div className="card">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>Shot map</h2>
+            {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
+          </div>
+          <PitchMap shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(Math.max(0, t.t_seconds - 3)); }} />
+          <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. We attack →.</div>
+        </div>
+
+        <div className="below-span">
           {g.notes ? <div className="card"><h3>Notes</h3><p className="small" style={{ whiteSpace: "pre-wrap" }}>{g.notes}</p></div> : null}
           {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · YouTube{b.videos.some((v) => v.kind === "wide_fixed") ? " · wide-angle source attached for analysis" : ""}</div> : null}
         </div>

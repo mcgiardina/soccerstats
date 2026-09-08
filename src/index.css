@@ -160,3 +160,24 @@ textarea { min-height: 80px; resize: vertical; }
 pre.chapters { background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; padding: .6rem; font-size: .8rem; white-space: pre-wrap; max-height: 260px; overflow: auto; }
 .period-editor { display: grid; grid-template-columns: 1fr auto auto; gap: .35rem .5rem; align-items: center; }
 .period-editor .k { font-size: .85rem; }
+
+/* Game page: the film is the point. Wide page, big player, sticky tag rail on desktop. */
+.page.game-page { max-width: 1760px; }
+.game-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+.game-main .player-wrap { width: min(100%, calc((100vh - 220px) * 16 / 9)); margin: 0 auto; }
+.keys-details { margin-top: .5rem; }
+.keys-details summary { cursor: pointer; font-size: .8rem; color: var(--muted); user-select: none; }
+.below { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: 1rem; }
+.below .card { margin-bottom: 0; }
+.below-span { display: grid; gap: 1rem; }
+@media (min-width: 900px) {
+  .below { grid-template-columns: 1fr 1fr; }
+  .below-span { grid-column: 1 / -1; }
+}
+@media (min-width: 1000px) {
+  .game-layout { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+  .game-side { position: sticky; top: 58px; max-height: calc(100vh - 70px); display: flex; }
+  .game-side .side-card { display: flex; flex-direction: column; width: 100%; max-height: 100%; margin: 0; min-height: 0; }
+  .side-scroll { overflow: auto; min-height: 0; flex: 1; padding-right: 2px; }
+}
+@media (min-width: 1500px) { .game-layout { grid-template-columns: minmax(0, 1fr) 400px; } }
