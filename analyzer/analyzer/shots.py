@@ -15,9 +15,9 @@ def _holder_before(sequence, t, lookback_s=2.0):
     return holder
 
 
-# Defaults tuned on an 82-minute AI-panned sample game: ~24 candidates. Without a goal or
+# min_speed 400 px/s suits the higher BallerCam view (36 kicks in 65 min); 600 suited a lower XbotGo view. Without a goal or
 # goalkeeper detector these are *kicks* (long balls, clearances, goal kicks, some shots).
-def candidates(dets, fps=5.0, min_speed=600.0, speed_jump=2.0, min_gap_s=8, sequence=None):
+def candidates(dets, fps=5.0, min_speed=400.0, speed_jump=2.0, min_gap_s=8, sequence=None):
     """min_speed: px/s the ball must reach; speed_jump: ratio to its speed before the kick."""
     out = []
     last_t = -1e9
@@ -107,11 +107,13 @@ def classify(cands, dets, H, window_s=1.0, min_conf=0.4):
     return shots, kicks
 
 
-def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, approach_frac=0.35):
-    """Fallback when no pitch geometry is available: a kick becomes a shot candidate if a
-    goalkeeper is visible around the kick and the ball closes most of the distance toward
-    that keeper in the following second or two. Keepers only stand in one place, so
-    "toward the keeper" is a fair proxy for "toward the goal" on panned footage.
+def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, max_range_h=22.0, end_within_h=6.0, min_cos=0.75):
+    """Fallback when no pitch geometry is available. The keeper's bounding-box height is used
+    as a ruler (~1.4 m for a youth keeper), so the test is camera-independent:
+      - the kick starts within `max_range_h` keeper-heights of a visible keeper (shooting range),
+      - the ball moves toward that keeper (cosine >= min_cos),
+      - and ends within `end_within_h` keeper-heights of the keeper, or passes beyond them.
+    With two keepers in frame the one the ball travels toward is used.
     Returns (shots, remaining_kicks)."""
     ts = [d.t for d in dets]
     shots, rest = [], []
@@ -120,22 +122,44 @@ def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, approach_frac=0.35):
         i0 = max(0, int(np.searchsorted(ts, t_kick - 0.3)))
         i1 = min(len(dets), int(np.searchsorted(ts, t_kick + window_s)))
         win = dets[i0:i1]
-        keepers = [(d.t, k) for d in win for k in getattr(d, "keepers", []) or []]
         balls = [(d.t, d.ball) for d in win if d.ball]
-        if not keepers or len(balls) < 3:
+        if len(balls) < 3:
             rest.append(c); continue
-        # keeper position: median of detections in the window (the camera pans, so tolerate drift)
-        kx = float(np.median([(k[0] + k[2]) / 2 for _, k in keepers]))
-        ky = float(np.median([k[3] for _, k in keepers]))
-        d_start = np.hypot(balls[0][1][0] - kx, balls[0][1][1] - ky)
-        d_min = min(np.hypot(b[0] - kx, b[1] - ky) for _, b in balls[1:])
-        if d_start < 40:
-            rest.append(c); continue                      # keeper already had it: a goal kick / punt
-        closed = 1.0 - d_min / d_start
-        if closed >= approach_frac:
-            conf = round(min(0.95, 0.45 + 0.4 * closed), 3)
-            shots.append({**c, "confidence": conf, "keeper_approach": round(closed, 2)})
-        else:
-            rest.append(c)
+        b0 = np.array(balls[0][1], float)
+        b1 = np.array(balls[-1][1], float)
+        move = b1 - b0
+        if np.linalg.norm(move) < 1e-3:
+            rest.append(c); continue
+        # candidate keepers: cluster keeper detections in the window by position
+        kps = [k for d in win for k in (getattr(d, "keepers", []) or [])]
+        if not kps:
+            rest.append(c); continue
+        best = None
+        for k in kps:
+            kx, ky, kh = (k[0] + k[2]) / 2, k[3], max(8.0, k[3] - k[1])
+            to_k = np.array([kx, ky]) - b0
+            dist0 = np.linalg.norm(to_k)
+            if dist0 < 1e-3:
+                continue
+            cos = float(np.dot(move, to_k) / (np.linalg.norm(move) * dist0))
+            score = cos
+            if best is None or score > best[0]:
+                best = (score, kx, ky, kh, dist0)
+        if best is None:
+            rest.append(c); continue
+        cos, kx, ky, kh, dist0 = best
+        if dist0 < 2.5 * kh:                         # keeper already on the ball: goal kick / punt
+            rest.append(c); continue
+        if dist0 > max_range_h * kh or cos < min_cos:
+            rest.append(c); continue
+        d_end = min(np.hypot(b[0] - kx, b[1] - ky) for _, b in balls[1:])
+        # "passes beyond": projection of the end point along the kick direction exceeds the keeper's
+        along_end = float(np.dot(b1 - b0, move) / np.linalg.norm(move))
+        along_k = float(np.dot(np.array([kx, ky]) - b0, move) / np.linalg.norm(move))
+        if d_end > end_within_h * kh and along_end < along_k:
+            rest.append(c); continue
+        closeness = 1.0 - min(1.0, d_end / (end_within_h * kh))
+        conf = round(min(0.95, 0.45 + 0.25 * closeness + 0.25 * max(0.0, cos - min_cos) / (1 - min_cos)), 3)
+        shots.append({**c, "confidence": conf, "keeper_range_h": round(dist0 / kh, 1), "keeper_cos": round(cos, 2), "keeper_end_h": round(d_end / kh, 1)})
     print(f"{len(shots)} shot candidates via keeper approach, {len(rest)} kicks remain")
     return shots, rest

@@ -27,6 +27,13 @@ with the other `--us-cluster` or convert with `--swap-teams`.
 Measured on an M5 Pro: detection runs ~60-100 frames/s at 1280 input, so a 75-minute game
 at 5 fps takes roughly 6-8 minutes after the download.
 
+Measured on a public BallerCam game (65 min, 720p) in Sept 2026 with the Roboflow weights:
+ball seen in 56% of frames, a goalkeeper visible in 70%, 61% of frames attributed to a team,
+usable homography on 11% of one-per-second frames. Shot candidates come from a kick detector
+plus a keeper-approach test (kick within ~22 keeper-heights of a visible keeper, ball moving
+at the keeper, ending within ~6 keeper-heights): 22 candidates for the game, roughly half of
+which looked like real attempts on review. They are proposals; a human confirms.
+
 Known limits of the stock COCO model (no Roboflow football weights), measured on two
 sample games in Sept 2026:
 - Ball found in ~24% of frames. Team attribution (hue-grouped kit colours) was correct in
