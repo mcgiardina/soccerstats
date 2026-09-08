@@ -1,3 +1,4 @@
+import { mainVideo } from "../lib/types";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { SeasonData } from "../lib/api";
 import { summarizeGame } from "../lib/stats";
@@ -15,7 +16,7 @@ export function buildTrend(d: SeasonData): TrendPoint[] {
   return [...d.games]
     .sort((a, b) => a.played_on.localeCompare(b.played_on))
     .map((g) => {
-      const s = summarizeGame(g, g.videos[0] ?? null, d.tags.filter((t) => t.game_id === g.id), d.shots.filter((x) => x.game_id === g.id), d.teamStats.filter((x) => x.game_id === g.id));
+      const s = summarizeGame(g, mainVideo(g.videos), d.tags.filter((t) => t.game_id === g.id), d.shots.filter((x) => x.game_id === g.id), d.teamStats.filter((x) => x.game_id === g.id));
       return {
         id: g.id, date: g.played_on, label: `${fmtDateShort(g.played_on)} ${g.opponent}`,
         goalsFor: s.us.goals, goalsAgainst: s.them.goals, shotsFor: s.us.shots, shotsAgainst: s.them.shots,

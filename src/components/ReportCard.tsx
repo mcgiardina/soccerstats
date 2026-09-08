@@ -1,4 +1,5 @@
 import type { GameBundle } from "../lib/types";
+import { mainVideo } from "../lib/types";
 import { CONFIG } from "../config";
 import { summarizeGame, trustedTags, isGoalTag } from "../lib/stats";
 import { toMatchTime, fmtDate } from "../lib/time";
@@ -7,7 +8,7 @@ import StatsPanel from "./StatsPanel";
 import Momentum from "./Momentum";
 
 export default function ReportCard({ b }: { b: GameBundle }) {
-  const video = b.videos[0] ?? null;
+  const video = mainVideo(b.videos);
   const s = summarizeGame(b.game, video, b.tags, b.shots, b.teamStats);
   const goals = trustedTags(b.tags).filter(isGoalTag).sort((a, c) => a.t_seconds - c.t_seconds);
   const usFirst = b.game.home_away !== "away";

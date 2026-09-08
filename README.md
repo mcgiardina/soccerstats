@@ -20,8 +20,12 @@ Zero recurring cost, one admin password, read-only links for parents.
    already rewrites all routes to `index.html`.
 
 ## Weekly flow
-1. Stream/upload the game to YouTube as **unlisted**.
-2. Admin → `+ Game`. Paste the URL, fill in the date/opponent/score.
+1. After the game, BallerCam saves the processed 1080p file to the iPhone camera roll.
+   Upload it to YouTube as **unlisted**. (The BallerCam live-stream link is for watching live;
+   YouTube is the archive.)
+2. Admin → `+ Game`. Paste the URL, fill in the date/opponent/score. If you also get the raw
+   4K fisheye out of the phone, upload it unlisted too and attach it from Edit → Video sources
+   as a *Wide-angle source*; viewers never see it, the analyzer prefers it for pitch geometry.
 3. Open the game. **Periods** tab: scrub to kickoff / halftime / 2nd half / full time and press Set.
 4. Watch and tag with hotkeys: `g` goal, `x` shot, `c` chance, `s` save, `t` turnover, `k` corner,
    `f` free kick, `i` throw-in, `p` penalty, `n` note. Hold **Shift** for the opponent. Shots and goals

@@ -1,3 +1,4 @@
+import { mainVideo } from "../lib/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { loadSeason, type SeasonData } from "../lib/api";
@@ -65,7 +66,7 @@ export default function SeasonPage() {
       {games.length === 0 ? <div className="card muted">No games{isAdmin ? " yet. Add one to get started." : " published yet."}</div> : null}
       <div className="game-list">
         {games.map((g) => {
-          const v = g.videos[0];
+          const v = mainVideo(g.videos);
           const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), [], []);
           const cls = s.us.goals > s.them.goals ? "win" : s.us.goals < s.them.goals ? "loss" : "draw";
           const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && t.type === "goal");

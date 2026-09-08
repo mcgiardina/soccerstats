@@ -1,6 +1,7 @@
 # Analyzer
 
-Standalone CLI. Reads a game from Supabase, pulls the unlisted YouTube video at 720p,
+Standalone CLI. Reads a game from Supabase, pulls the unlisted YouTube video at 720p (or
+`--max-height 1080` for the BallerCam 1080p upload, which helps the tiny ball),
 samples 5 fps, detects players and ball, assigns teams by kit colour, attributes possession
 to the nearest player, and writes `team_stats`, `stat_buckets`, and machine `tags` back.
 Everything it writes is a proposal; the web app renders it distinctly for a human to confirm.
@@ -50,9 +51,13 @@ Never runs automatically. The web app's "Queue analysis run" button only inserts
 5. `possession.py` nearest-player attribution, 1.5 s smoothing, per half + 5-minute buckets, turnovers.
 6. `shots.py` ball acceleration toward a goal region → machine shot tags (recall-first).
 7. `homography.py` pitch keypoints → homography (only if `PITCH_WEIGHTS` set). Feeds machine shot
-   locations and `shape_snapshots`.
+   locations and `shape_snapshots`. Prefers a `wide_fixed` video when the game has one.
+7b. `dewarp.py` fisheye de-warp for a raw wide-angle source such as the BallerCam 4K fisheye,
+   applied to `wide_fixed` videos when `calib/<camera>.json` exists (default camera name
+   `ballercam`). Calibrate once by eye: `python calibrate.py preview <video.mp4> ballercam`,
+   look at the candidate images, then `python calibrate.py save ballercam <w> <h> <k1> <fov_scale>`.
 8. `db.py` writes. Human rows are never overwritten.
 
-Honesty: the tracking camera keeps the ball centred, so the ball's pixel position says
-nothing about field position. Everything positional goes through the homography or is skipped.
+Honesty: the BallerCam upload is an AI-panned crop that keeps the ball centred, so the
+ball's pixel position says nothing about field position. Everything positional goes through the homography or is skipped.
 No per-player data is ever persisted, including tracker IDs.

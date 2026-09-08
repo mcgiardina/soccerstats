@@ -36,7 +36,7 @@ export default function NewGamePage() {
 
   async function submit(g: GameInput) {
     const game = await createGame(g);
-    if (ytId) await addVideo({ game_id: game.id, youtube_id: ytId, kind: "stream_archive", title: ytTitle });
+    if (ytId) await addVideo({ game_id: game.id, youtube_id: ytId, kind: "upload", title: ytTitle });
     nav(`/games/${game.id}`);
   }
 

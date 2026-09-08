@@ -17,8 +17,8 @@ import { HOTKEYS, useHotkeys } from "../components/useHotkeys";
 import * as api from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { CONFIG } from "../config";
-import type { GameBundle, Period, Shot, Tag, TagType } from "../lib/types";
-import { SET_PIECE_TYPES, TAG_LABELS } from "../lib/types";
+import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
+import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
 import { fmtDate, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
@@ -43,6 +43,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const [period, setPeriod] = useState<Period>("full");
   const [panel, setPanel] = useState<"tags" | "periods" | "chapters" | "analysis" | "shape">("tags");
   const [videoUrl, setVideoUrl] = useState("");
+  const [videoKind, setVideoKind] = useState<NonNullable<Video["kind"]>>("upload");
   const player = useRef<PlayerHandle>(null);
   const startAt = useMemo(() => { const t = Number(params.get("t")); return Number.isFinite(t) && t > 0 ? t : undefined; }, [params]);
 
@@ -50,7 +51,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   useEffect(() => { if (ready) reload(); }, [reload, ready, isAdmin]);
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
-  const video = b?.videos[0] ?? null;
+  const video = b ? mainVideo(b.videos) : null;
   const pitch = { lengthM: b?.game.pitch_length_m ?? CONFIG.pitch.lengthM, widthM: b?.game.pitch_width_m ?? CONFIG.pitch.widthM };
   const visibleTags = useMemo(() => (b ? (admin ? b.tags : trustedTags(b.tags)) : []), [b, admin]);
   const summary = useMemo(() => (b ? summarizeGame(b.game, video, b.tags, b.shots, b.teamStats, period) : null), [b, video, period]);
@@ -118,7 +119,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
     const yid = parseYouTubeId(videoUrl);
     if (!yid || !b) { showToast("Not a YouTube URL"); return; }
     const o = await fetchOEmbed(yid);
-    await api.addVideo({ game_id: b.game.id, youtube_id: yid, kind: "stream_archive", title: o?.title ?? null });
+    await api.addVideo({ game_id: b.game.id, youtube_id: yid, kind: videoKind, title: o?.title ?? null });
     setVideoUrl(""); reload();
   }
 
@@ -203,7 +204,9 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             <div className="card">
               <h2>No video yet</h2>
               {admin ? (
-                <div className="row"><input type="url" placeholder="Paste YouTube URL" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} /><button className="btn primary" onClick={attachVideo}>Attach</button></div>
+                <div className="row"><input type="url" placeholder="Paste YouTube URL" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} />
+                  <select value={videoKind} onChange={(e) => setVideoKind(e.target.value as NonNullable<Video["kind"]>)} style={{ width: "auto" }}>{VIDEO_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
+                  <button className="btn primary" onClick={attachVideo}>Attach</button></div>
               ) : <p className="muted">Film hasn't been attached to this game.</p>}
             </div>
           )}
@@ -278,7 +281,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
 
           {g.notes ? <div className="card"><h3>Notes</h3><p className="small" style={{ whiteSpace: "pre-wrap" }}>{g.notes}</p></div> : null}
-          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · YouTube</div> : null}
+          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · YouTube{b.videos.some((v) => v.kind === "wide_fixed") ? " · wide-angle source attached for analysis" : ""}</div> : null}
         </div>
       </div>
 
@@ -288,12 +291,20 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         <Modal onClose={() => setEditGame(false)} title="Edit game">
           <GameForm initial={g} opponents={[]} onSubmit={async (input) => { await api.updateGame(g.id, input); setEditGame(false); reload(); }} />
           <hr style={{ border: 0, borderTop: "1px solid var(--line)", margin: "1rem 0" }} />
-          {video ? (
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span className="small muted">Video {video.youtube_id}</span>
-              <button className="btn sm danger" onClick={async () => { if (confirm("Detach this video? Tags stay but lose their video link.")) { await api.deleteVideo(video.id); setEditGame(false); reload(); } }}>Detach video</button>
+          <h3>Video sources</h3>
+          {b.videos.map((v) => (
+            <div key={v.id} className="tag-row small">
+              <span className="badge">{VIDEO_KINDS.find((k) => k.value === v.kind)?.label ?? v.kind ?? "video"}</span>
+              <span className="lbl">{v.title ?? v.youtube_id}{v.duration_seconds ? ` · ${Math.round(v.duration_seconds / 60)} min` : ""}</span>
+              <button className="btn sm danger" onClick={async () => { if (confirm("Detach this video? Tags stay but lose their video link.")) { await api.deleteVideo(v.id); reload(); } }}>Detach</button>
             </div>
-          ) : null}
+          ))}
+          <div className="row" style={{ marginTop: ".5rem" }}>
+            <input type="url" placeholder="YouTube URL of another source" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+            <select value={videoKind} onChange={(e) => setVideoKind(e.target.value as NonNullable<Video["kind"]>)} style={{ width: "auto" }}>{VIDEO_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
+            <button className="btn sm" onClick={attachVideo}>Attach</button>
+          </div>
+          <p className="tiny muted" style={{ marginTop: ".3rem" }}>{VIDEO_KINDS.find((k) => k.value === videoKind)?.hint}</p>
           <div className="row" style={{ justifyContent: "flex-end", marginTop: "1rem" }}>
             <button className="btn sm danger" onClick={async () => { if (confirm("Delete this game and all its tags? This cannot be undone.")) { await api.deleteGame(g.id); nav("/"); } }}>Delete game</button>
           </div>

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape  # noqa: E402
+from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp  # noqa: E402
 
 MODEL_VERSION = "mf-analyzer-0.1"
 
@@ -27,6 +27,8 @@ def main() -> int:
     ap.add_argument("--us-cluster", choices=["A", "B"], default=None, help="Which kit-colour cluster is us (skips the prompt)")
     ap.add_argument("--from-cache", action="store_true", help="Reuse cached detections + team labels; skip download/detect")
     ap.add_argument("--relabel", action="store_true", help="With --from-cache: redo team assignment (re-decodes frames, no re-detection)")
+    ap.add_argument("--max-height", type=int, default=720, help="Download resolution cap (720 default; 1080 helps the tiny ball)")
+    ap.add_argument("--camera", default="ballercam", help="Calibration name under calib/ used to de-warp a wide_fixed source")
     args = ap.parse_args()
 
     game = db.get_game(args.game_id)
@@ -64,7 +66,7 @@ def main() -> int:
                     d.img = None
                 frames = []
         else:
-            path = fetch.download(main_video["youtube_id"])
+            path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
             frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
             dets = detect.run(frames, backend=args.backend)
             us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
@@ -82,8 +84,14 @@ def main() -> int:
 
         H = None
         if homography.available() and frames:
-            src_path = fetch.download(wide["youtube_id"]) if wide else path
-            src_frames = video.sample(src_path, fps=1.0, limit_seconds=args.limit_seconds) if wide else frames
+            # Prefer the wide-angle source for anything positional; de-warp it if a calibration exists.
+            if wide:
+                src_path = fetch.download(wide["youtube_id"], max_height=args.max_height)
+                fn = dewarp.load(args.camera)
+                print(f"wide source {'de-warped with ' + args.camera if fn else 'used as-is (no calib/' + args.camera + '.json)'}")
+                src_frames = video.sample(src_path, fps=1.0, limit_seconds=args.limit_seconds, dewarp=fn)
+            else:
+                src_frames = frames
             H = homography.fit(src_frames)
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = homography.locate_shots(cands, dets, H) if H else {}

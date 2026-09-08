@@ -1,3 +1,4 @@
+import { mainVideo } from "../lib/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { loadSeason, type SeasonData } from "../lib/api";
@@ -18,7 +19,7 @@ export default function OpponentPage() {
 
   const shots = data.shots.filter((s) => games.some((g) => g.id === s.game_id));
   const record = games.reduce((r, g) => {
-    const s = summarizeGame(g, g.videos[0] ?? null, data.tags.filter((t) => t.game_id === g.id), [], []);
+    const s = summarizeGame(g, mainVideo(g.videos), data.tags.filter((t) => t.game_id === g.id), [], []);
     if (s.us.goals > s.them.goals) r.w++; else if (s.us.goals < s.them.goals) r.l++; else r.d++;
     r.gf += s.us.goals; r.ga += s.them.goals; return r;
   }, { w: 0, d: 0, l: 0, gf: 0, ga: 0 });
@@ -32,7 +33,7 @@ export default function OpponentPage() {
         <div className="card"><h3>All shots across these games</h3><PitchMap shots={shots} /><div className="tiny muted">We attack →, they attack ←. Gold ring = goal. Look for patterns: where do they hurt us, where do we get chances.</div></div>
       ) : null}
       {games.map((g) => {
-        const v = g.videos[0];
+        const v = mainVideo(g.videos);
         const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), data.shots.filter((x) => x.game_id === g.id), data.teamStats.filter((x) => x.game_id === g.id));
         return (
           <div key={g.id} className="card row" style={{ alignItems: "flex-start" }}>

@@ -10,7 +10,8 @@ class Frame:
     img: "object"
 
 
-def sample(path: str, fps: float = 5.0, limit_seconds=None):
+def sample(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
+    """dewarp: optional callable applied to every frame (fisheye sources)."""
     cap = cv2.VideoCapture(path, cv2.CAP_AVFOUNDATION) if hasattr(cv2, "CAP_AVFOUNDATION") else cv2.VideoCapture(path)
     if not cap.isOpened():
         cap = cv2.VideoCapture(path)
@@ -28,6 +29,8 @@ def sample(path: str, fps: float = 5.0, limit_seconds=None):
                 break
             ok, img = cap.retrieve()
             if ok:
+                if dewarp is not None:
+                    img = dewarp(img)
                 frames.append(Frame(t=t, img=img))
         i += 1
     cap.release()

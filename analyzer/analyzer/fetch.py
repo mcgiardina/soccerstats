@@ -7,13 +7,14 @@ import sys
 CACHE = os.environ.get("ANALYZER_CACHE") or os.path.expanduser("~/Library/Caches/match-film")
 
 
-def download(youtube_id: str) -> str:
+def download(youtube_id: str, max_height: int = 720) -> str:
     os.makedirs(CACHE, exist_ok=True)
-    out = os.path.join(CACHE, f"{youtube_id}.mp4")
+    out = os.path.join(CACHE, f"{youtube_id}.mp4" if max_height == 720 else f"{youtube_id}_{max_height}p.mp4")
     if os.path.exists(out) and os.path.getsize(out) > 1_000_000:
         return out
     # Video-only: no audio needed for analysis and no ffmpeg merge step required.
-    fmt = "bestvideo[height<=720][ext=mp4][vcodec^=avc1]/bestvideo[height<=720][ext=mp4]/best[height<=720][ext=mp4]"
+    fmt = (f"bestvideo[height<={max_height}][ext=mp4][vcodec^=avc1]/bestvideo[height<={max_height}][ext=mp4]"
+           f"/best[height<={max_height}][ext=mp4]")
     cmd = [sys.executable, "-m", "yt_dlp", "-f", fmt, "--no-playlist", "-o", out, f"https://www.youtube.com/watch?v={youtube_id}"]
     print("fetching", youtube_id)
     subprocess.run(cmd, check=True)

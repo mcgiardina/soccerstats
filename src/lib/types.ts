@@ -128,6 +128,17 @@ export interface ShapeSnapshot {
   positions: { x: number; y: number }[] | null;
 }
 
+/** The film people watch: the panned/processed upload, never the wide-angle analysis source. */
+export function mainVideo(videos: Video[]): Video | null {
+  return videos.find((v) => v.kind !== "wide_fixed") ?? videos[0] ?? null;
+}
+
+export const VIDEO_KINDS: { value: NonNullable<Video["kind"]>; label: string; hint: string }[] = [
+  { value: "upload", label: "Processed upload", hint: "BallerCam 1080p file from the camera roll, uploaded to YouTube" },
+  { value: "stream_archive", label: "Stream archive", hint: "A live-stream recording saved on YouTube" },
+  { value: "wide_fixed", label: "Wide-angle source", hint: "Raw fisheye / fixed full-pitch camera, for analysis only; not shown to viewers" },
+];
+
 export interface GameBundle {
   game: Game;
   videos: Video[];
