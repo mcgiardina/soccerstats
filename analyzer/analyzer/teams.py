@@ -50,10 +50,22 @@ def on_grass(img, box, min_green=0.45):
 
 
 def _feat(c):
-    # chroma dominates; lightness separates white from dark kits
-    # Lightness is down-weighted so sun/shade doesn't split one kit into two clusters,
-    # but still separates a white kit from a black one.
-    return np.array([c[1] - 128, c[2] - 128, (c[0] - 128) * 0.3], dtype=np.float32)
+    """Lightness-normalised chromaticity plus damped lightness. A navy shirt in shade and in
+    sun land near each other; white stays neutral; black stays dark."""
+    L = max(float(c[0]), 20.0)
+    return np.array([(c[1] - 128) / L * 100, (c[2] - 128) / L * 100, (c[0] - 128) * 0.15], dtype=np.float32)
+
+
+def _same_kit(ci, cj):
+    """Two cluster centres are the same kit if they share a hue (both chromatic), or are both
+    neutral with similar lightness. A neutral (white/grey) centre never merges with a coloured one."""
+    chroma_i, chroma_j = np.hypot(ci[0], ci[1]), np.hypot(cj[0], cj[1])
+    if chroma_i >= NEUTRAL_CHROMA and chroma_j >= NEUTRAL_CHROMA:
+        hue_gap = abs((np.degrees(np.arctan2(ci[1], ci[0]) - np.arctan2(cj[1], cj[0])) + 180) % 360 - 180)
+        return hue_gap < HUE_GAP_DEG
+    if chroma_i < NEUTRAL_CHROMA and chroma_j < NEUTRAL_CHROMA:
+        return abs(ci[2] - cj[2]) < NEUTRAL_LIGHT_GAP
+    return False
 
 
 def assign(dets, game_id, force_confirm=False, us_cluster=None):
