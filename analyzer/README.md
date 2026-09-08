@@ -26,10 +26,16 @@ with the other `--us-cluster` or convert with `--swap-teams`.
 Measured on an M5 Pro: detection runs ~60-100 frames/s at 1280 input, so a 75-minute game
 at 5 fps takes roughly 6-8 minutes after the download.
 
-Known limits of the stock COCO model (no Roboflow football weights): the ball is found in
-roughly a quarter of frames, the referee sometimes lands in a team cluster, and spectators
-behind a fence can be counted as players. Possession is still a share of *attributed*
-frames, and `ball_frames` records the denominator so the app can show how thin it is.
+Known limits of the stock COCO model (no Roboflow football weights), measured on two
+sample games in Sept 2026:
+- Ball found in ~24% of frames; team attribution was correct in 12/12 spot-checked frames.
+  Possession is a share of *attributed* frames and `ball_frames` records the denominator.
+- **Shot detection is not possible** without a goal / goalkeeper / pitch model: the motion
+  detector finds kicks (long balls, clearances, goal kicks). They land as machine tags
+  labelled "kick candidate" for a human to reject or promote. Roboflow's football-players
+  weights (adds goalkeeper + referee classes) or the pitch-keypoint model would unlock it.
+- Spectators sitting on grass, and referees in kit-like colours, can leak into a team
+  cluster; the four-cluster fit drops most of them.
 
 Never runs automatically. The web app's "Queue analysis run" button only inserts a
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).

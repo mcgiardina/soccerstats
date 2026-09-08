@@ -15,7 +15,9 @@ def _holder_before(sequence, t, lookback_s=2.0):
     return holder
 
 
-def candidates(dets, fps=5.0, min_speed=900.0, speed_jump=3.0, min_gap_s=8, sequence=None):
+# Defaults tuned on an 82-minute XbotGo Chameleon game: ~24 candidates. Without a goal or
+# goalkeeper detector these are *kicks* (long balls, clearances, goal kicks, some shots).
+def candidates(dets, fps=5.0, min_speed=600.0, speed_jump=2.0, min_gap_s=8, sequence=None):
     """min_speed: px/s the ball must reach; speed_jump: ratio to its speed before the kick."""
     out = []
     last_t = -1e9

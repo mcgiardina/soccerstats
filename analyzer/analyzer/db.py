@@ -73,7 +73,7 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
             continue
         rows.append({"game_id": game_id, "video_id": video_id, "t_seconds": round(s["t"], 1), "type": "shot",
                      "team": s.get("team"), "source": "machine", "confidence": round(float(s["confidence"]), 3),
-                     "label": "machine shot candidate"})
+                     "label": "machine kick candidate"})
     inserted = c.table("tags").insert(rows).select().execute().data if rows else []
     # Machine locations go on the shots table as proposals, marked 'machine'.
     from analyzer.xg import compute_xg, MODEL_VERSION
