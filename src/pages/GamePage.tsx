@@ -69,13 +69,13 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
     if (!b || !video) return;
     const t = player.current?.currentTime() ?? current;
     const team = opposing ? "them" : "us";
-    const tag = await api.addTag({ game_id: b.id ?? id, video_id: video.id, t_seconds: Math.round(t * 10) / 10, type, team, source: "human" });
+    const tag = await api.addTag({ game_id: b.game.id, video_id: video.id, t_seconds: Math.round(t * 10) / 10, type, team, source: "human" });
     const isShotLike = type === "shot" || type === "goal" || type === "penalty";
     showToast(`${TAG_LABELS[type]} · ${team} @ ${toMatchTime(video, t).label}`);
     await reload();
     if (isShotLike) setPlacing(tag);
     else if (SET_PIECE_TYPES.includes(type) || type === "note") setEditing({ tag, quick: true, isNew: true });
-  }, [b, video, current, id, reload, showToast]);
+  }, [b, video, current, reload, showToast]);
 
   useHotkeys({
     enabled: admin && !editing && !placing && !editGame,

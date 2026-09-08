@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import GameForm, { type GameInput } from "../components/GameForm";
 import { addVideo, createGame, listGames, listOpponents, type GameRow } from "../lib/api";
@@ -11,7 +11,7 @@ export default function NewGamePage() {
   const [allGames, setAllGames] = useState<GameRow[]>([]);
   const [history, setHistory] = useState<GameRow[]>([]);
   const [url, setUrl] = useState("");
-  const [ytId, setYtId] = useState<string | null>(null);
+  const ytId = useMemo(() => parseYouTubeId(url), [url]);
   const [ytTitle, setYtTitle] = useState<string | null>(null);
   const [ytErr, setYtErr] = useState<string | null>(null);
 
@@ -23,13 +23,16 @@ export default function NewGamePage() {
   }, [allGames]);
 
   useEffect(() => {
-    const id = parseYouTubeId(url);
-    setYtId(id); setYtTitle(null); setYtErr(null);
-    if (!id) { if (url.trim()) setYtErr("Couldn't find a YouTube ID in that."); return; }
+    if (!ytId) return;
     let live = true;
-    fetchOEmbed(id).then((o) => { if (!live) return; if (o) setYtTitle(o.title); else setYtErr("YouTube didn't return details (private video?). You can still save it."); });
+    fetchOEmbed(ytId).then((o) => {
+      if (!live) return;
+      if (o) { setYtTitle(o.title); setYtErr(null); }
+      else { setYtTitle(null); setYtErr("YouTube didn't return details (private video?). You can still save it."); }
+    });
     return () => { live = false; };
-  }, [url]);
+  }, [ytId]);
+  const urlErr = url.trim() && !ytId ? "Couldn't find a YouTube ID in that." : null;
 
   async function submit(g: GameInput) {
     const game = await createGame(g);
@@ -50,7 +53,7 @@ export default function NewGamePage() {
             <div className="small"><div><strong>{ytTitle ?? ytId}</strong></div><div className="muted">ID {ytId}. Duration is read from the player once you open the game.</div></div>
           </div>
         ) : null}
-        {ytErr ? <p className="err small">{ytErr}</p> : null}
+        {urlErr || ytErr ? <p className="err small">{urlErr ?? ytErr}</p> : null}
         <GameForm opponents={opponents} onSubmit={submit} submitLabel="Create game" onOpponentChange={onOpponentChange} />
       </div>
       {history.length ? (
