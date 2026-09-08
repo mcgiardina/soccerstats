@@ -13,9 +13,10 @@ Zero recurring cost, one admin password, read-only links for parents.
 1. **Supabase** (personal account): create a project, run `supabase/migrations/0001_schema.sql`
    in the SQL editor. In Authentication → Users, add one user (email + password). That is the
    admin. Disable public sign-ups in Authentication → Providers → Email.
-2. **Env**: `cp .env.example .env`, fill in the project URL, anon key, and the admin email.
+2. **Config**: put the project URL, publishable key, and admin email in `src/config.ts`.
+   They are public by design (RLS is the security boundary). `.env` can override them.
 3. `npm install && npm run dev`
-4. **Vercel** (personal account): import the repo, add the same three env vars. `vercel.json`
+4. **Vercel** (personal account): import the repo. No env vars needed. `vercel.json`
    already rewrites all routes to `index.html`.
 
 ## Weekly flow

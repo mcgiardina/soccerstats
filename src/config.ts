@@ -6,4 +6,11 @@ export const CONFIG = {
   font: "Inter",
   logoUrl: null as string | null,
   pitch: { lengthM: 105, widthM: 68 }, // default; per-game override allowed
+  // Supabase project. These values are public by design (they ship to every browser);
+  // Row Level Security is the actual boundary. VITE_* env vars override them when set.
+  supabase: {
+    url: "https://lrovuuhgnevxrdxoeuxl.supabase.co",
+    publishableKey: "sb_publishable_0AQkCLZFW3x4tYpaDolfbQ_XIV5LuIO",
+    adminEmail: "mcgiardina@gmail.com",
+  },
 };
