@@ -5,6 +5,9 @@ import GamePage from "./pages/GamePage";
 import NewGamePage from "./pages/NewGamePage";
 import OpponentPage from "./pages/OpponentPage";
 import LoginPage from "./pages/LoginPage";
+import SettingsPage from "./pages/SettingsPage";
+import CoachPage from "./pages/CoachPage";
+import { TeamProvider } from "./lib/team";
 import ReportPage from "./pages/ReportPage";
 import { useAuth } from "./lib/auth";
 import { supabaseConfigured } from "./lib/supabase";
@@ -16,6 +19,7 @@ function RequireAdmin({ children }: { children: React.ReactElement }) {
 }
 
 export default function App() {
+  const { isAdmin } = useAuth();
   if (!supabaseConfigured) {
     return (
       <div className="page">
@@ -27,6 +31,7 @@ export default function App() {
     );
   }
   return (
+    <TeamProvider isAdmin={isAdmin}>
     <Layout>
       <Routes>
         <Route path="/" element={<SeasonPage />} />
@@ -37,8 +42,11 @@ export default function App() {
         <Route path="/g/:id" element={<GamePage shareView />} />
         <Route path="/g/:id/report" element={<ReportPage />} />
         <Route path="/opponents/:name" element={<OpponentPage />} />
+        <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
+        <Route path="/coach" element={<CoachPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
+    </TeamProvider>
   );
 }

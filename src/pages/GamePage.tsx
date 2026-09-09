@@ -16,7 +16,7 @@ import Modal from "../components/Modal";
 import { HOTKEYS, useHotkeys } from "../components/useHotkeys";
 import * as api from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { CONFIG } from "../config";
+import { useShow, useTeam } from "../lib/team";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
@@ -44,6 +44,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const nav = useNavigate();
   const { isAdmin, ready } = useAuth();
   const admin = isAdmin && !shareView;
+  const team = useTeam();
+  const show = useShow();
 
   const [b, setB] = useState<GameBundle | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
   const video = b ? mainVideo(b.videos) : null;
-  const pitch = { lengthM: b?.game.pitch_length_m ?? CONFIG.pitch.lengthM, widthM: b?.game.pitch_width_m ?? CONFIG.pitch.widthM };
+  const pitch = { lengthM: b?.game.pitch_length_m ?? team.pitch.lengthM, widthM: b?.game.pitch_width_m ?? team.pitch.widthM };
   const visibleTags = useMemo(() => (b ? (admin ? b.tags : trustedTags(b.tags)) : []), [b, admin]);
   const summary = useMemo(() => (b ? summarizeGame(b.game, video, b.tags, b.shots, b.teamStats, period) : null), [b, video, period]);
 
@@ -188,7 +190,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           {video ? (
             <>
               <YouTubePlayer ref={player} youtubeId={video.youtube_id} startAt={startAt} onTime={setCurrent} onDuration={setDuration} />
-              <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={visibleTags} onSeek={seek} />
+              <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={show("tags") ? visibleTags : []} onSeek={seek} />
               <div className="transport">
                 <span className="mono clock">{toMatchTime(video, current).label}</span>
                 <div className="transport-btns" role="group" aria-label="Playback">
@@ -204,12 +206,12 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               </div>
               <div className="title-row">
                 <div>
-                  <h1>{usFirst ? `${CONFIG.teamName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${CONFIG.teamName}` : ""}</h1>
+                  <h1>{usFirst ? `${team.shortName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
                   <div className="sub">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
                 </div>
                 <div className="actions-pills">
                   <button className="btn" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>↗ Share</button>
-                  <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link>
+                  {show("report") ? <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link> : null}
                   {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
                   {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
                 </div>
@@ -228,7 +230,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             </>
           ) : (
             <div className="card">
-              <h1 style={{ marginBottom: ".25rem" }}>{usFirst ? `${CONFIG.teamName} ${scoreText} ` : ""}{g.opponent}{!usFirst ? ` ${scoreText} ${CONFIG.teamName}` : ""}</h1>
+              <h1 style={{ marginBottom: ".25rem" }}>{usFirst ? `${team.shortName} ${scoreText} ` : ""}{g.opponent}{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
               <div className="actions-pills" style={{ marginBottom: "1rem" }}>
                 <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link>
                 {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
@@ -244,7 +246,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           )}
         </div>
 
-        <aside className="game-side">
+        <aside className="game-side" hidden={!show("tags") && !admin}>
           <div className="card side-card">
             {!admin && !b.shapes.length ? <h3 style={{ marginBottom: ".6rem" }}>Tags <span className="muted">· {visibleTags.length}</span></h3> : null}
             <div className="seg" style={{ marginBottom: ".6rem", flexWrap: "wrap", display: !admin && !b.shapes.length ? "none" : undefined }}>
@@ -258,7 +260,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {panel === "tags" ? (
                 <>
                   {admin && b.tags.some((t) => t.source === "machine" && t.confirmed == null) ? <div className="notice">Machine proposals need review. ✓ accepts, ✗ rejects. Only confirmed ones show to parents.</div> : null}
-                  <TagList tags={visibleTags} shots={b.shots} video={video} gameId={g.id} isAdmin={admin} currentTime={current} onSeek={seek}
+                  <TagList tags={show("tags") ? visibleTags : []} shots={b.shots} video={video} gameId={g.id} isAdmin={admin} currentTime={current} onSeek={seek}
                     onEdit={(t) => setEditing({ tag: t, quick: false, isNew: false })} onDelete={removeTag} onPlace={setPlacing} onReview={review} onToast={showToast} />
                   {admin && video ? <button className="btn sm" style={{ marginTop: ".5rem" }} onClick={() => setEditing({ tag: { t_seconds: Math.round(current), type: "note", team: "us" }, quick: false, isNew: true })}>+ Add tag at {toMatchTime(video, current).label}</button> : null}
                 </>
@@ -296,7 +298,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       </div>
 
       <div className="below">
-        <div className="card">
+        <div className="card" hidden={!show("stats")}>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2 style={{ margin: 0 }}>Stats</h2>
             <div className="seg">
@@ -304,10 +306,10 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             </div>
           </div>
           <StatsPanel s={summary} />
-          {b.buckets.length ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} /></div> : null}
+          {b.buckets.length && show("momentum") ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} /></div> : null}
         </div>
 
-        <div className="card">
+        <div className="card" hidden={!show("shotmap")}>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2 style={{ margin: 0 }}>Shot map</h2>
             {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}

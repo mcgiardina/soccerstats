@@ -7,12 +7,15 @@ import { summarizeGame } from "../lib/stats";
 import { fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
 import PitchMap from "../components/PitchMap";
+import { useShow } from "../lib/team";
 
 export default function OpponentPage() {
   const { name = "" } = useParams();
   const { isAdmin } = useAuth();
+  const show = useShow();
   const [data, setData] = useState<SeasonData | null>(null);
   useEffect(() => { loadSeason().then(setData); }, [isAdmin]);
+  if (!show("opponent")) return <div className="page centered"><div className="card"><h1>Opponent history</h1><p className="muted">This section is turned off for parents.</p><Link to="/">← Season</Link></div></div>;
 
   const games = useMemo(() => (data?.games ?? []).filter((g) => g.opponent.toLowerCase() === name.toLowerCase()), [data, name]);
   if (!data) return <div className="page muted">Loading…</div>;

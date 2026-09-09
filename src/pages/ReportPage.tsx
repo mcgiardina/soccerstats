@@ -5,15 +5,18 @@ import { getGameBundle } from "../lib/api";
 import type { GameBundle } from "../lib/types";
 import { useAuth } from "../lib/auth";
 import { shareUrl, copyText } from "../lib/links";
+import { useShow } from "../lib/team";
 
 export default function ReportPage() {
   const { id = "" } = useParams();
   const { isAdmin } = useAuth();
+  const show = useShow();
   const [b, setB] = useState<GameBundle | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { getGameBundle(id).then(setB).catch((e) => setErr(e.message)); }, [id, isAdmin]);
   if (err) return <div className="page"><div className="card err">Not available. {err}</div></div>;
   if (!b) return <div className="page muted">Loading…</div>;
+  if (!show("report")) return <div className="page centered"><div className="card"><h1>Report card</h1><p className="muted">The coach has turned report cards off for parents.</p><Link to={`/g/${id}`}>← Back to the game</Link></div></div>;
   return (
     <div className="page" style={{ maxWidth: 480 }}>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: ".75rem" }}>

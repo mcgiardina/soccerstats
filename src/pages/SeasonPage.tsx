@@ -8,10 +8,12 @@ import { thumbnailUrl } from "../lib/youtube";
 import { summarizeGame } from "../lib/stats";
 import TrendCharts, { buildTrend } from "../components/TrendCharts";
 import DateRangePicker from "../components/DateRangePicker";
-import { CONFIG } from "../config";
+import { useShow, useTeam } from "../lib/team";
 
 export default function SeasonPage() {
   const { isAdmin } = useAuth();
+  const team = useTeam();
+  const show = useShow();
   const [data, setData] = useState<SeasonData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -51,7 +53,7 @@ export default function SeasonPage() {
     <div className="page">
       <div className="hero">
         <div className="reveal">
-          <div className="eyebrow">{CONFIG.teamName} · season</div>
+          <div className="eyebrow">{team.name} · season</div>
           <div className="kpi">
             <span className="num">{record.w}<small>W</small></span>
             <span className="num">{record.d}<small>D</small></span>
@@ -66,7 +68,7 @@ export default function SeasonPage() {
         </div>
       </div>
 
-      <TrendCharts data={trend} />
+      {show("trends") ? <TrendCharts data={trend} /> : null}
 
       <div className="filters">
         <div className="search"><input className="pill" type="text" placeholder="Search notes & tag labels" value={q} onChange={(e) => setQ(e.target.value)} /></div>

@@ -2,17 +2,20 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import { CONFIG } from "../config";
 import { useAuth } from "../lib/auth";
+import { useTeam } from "../lib/team";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { isAdmin, logout } = useAuth();
+  const team = useTeam();
   return (
     <>
       <nav className="nav">
-        <Link to="/" className="brand">
-          {CONFIG.logoUrl ? <img src={CONFIG.logoUrl} alt="" style={{ height: 22, verticalAlign: "middle", marginRight: 8 }} /> : null}
+        <Link to="/" className={`brand ${team.logo ? "has-logo" : ""}`}>
+          {team.logo ? <img className="logo" src={team.logo} alt="" /> : null}
           {CONFIG.appName}
-          <small>{CONFIG.teamName}</small>
+          <small>{team.shortName}</small>
         </Link>
+        {team.isCoach && !isAdmin ? <Link to="/coach" className="pill">coach</Link> : null}
         <span className="spacer" />
         <div className="nav-actions">
           {isAdmin ? (
