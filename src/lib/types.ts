@@ -71,6 +71,8 @@ export interface Shot {
   on_target: boolean | null;
   is_goal: boolean;
   body_part: "foot" | "head" | null;
+  context: "regular" | "corner" | "free_kick" | "indirect_free_kick" | "fastbreak" | "penalty" | null;
+  assist: "none" | "cross" | "through_ball" | null;
   xg: number | null;
   xg_model_version: string | null;
   created_at: string;

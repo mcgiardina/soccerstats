@@ -324,3 +324,5 @@ pre.chapters { background: #f7f7f4; border: 1px solid var(--line); border-radius
   .transport-btns { grid-column: 1 / -1; justify-content: center; order: 3; }
   .transport > a { justify-self: end; }
 }
+.placer-opts { display: grid; gap: .5rem; margin-top: .7rem; }
+.placer-opts .seg { flex-wrap: wrap; }

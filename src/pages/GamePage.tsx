@@ -154,7 +154,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
     let n = 0;
     for (const s of b.shots) {
       if (s.pitch_x != null && s.pitch_y != null) {
-        await api.upsertShot({ tag_id: s.tag_id, game_id: s.game_id, xg: computeXg(s.pitch_x, s.pitch_y, pitch.lengthM, pitch.widthM), xg_model_version: XG_MODEL_VERSION });
+        await api.upsertShot({ tag_id: s.tag_id, game_id: s.game_id, xg: computeXg(s.pitch_x, s.pitch_y, pitch.lengthM, pitch.widthM, { context: s.context, assist: s.assist, headed: s.body_part === "head" }), xg_model_version: XG_MODEL_VERSION });
         n++;
       }
     }
