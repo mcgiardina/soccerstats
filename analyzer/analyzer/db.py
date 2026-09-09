@@ -69,15 +69,28 @@ def machine_tag_rows(s, label):
     t = round(float(s["t"]), 1)
     conf = round(float(s["confidence"]), 3)
     out = s.get("outcome", "shot")
+    src = s.get("source", "keeper")
     rows = []
     if out == "goal?":
         rows.append({"t_seconds": t, "type": "goal", "team": s.get("team"), "confidence": round(conf * 0.8, 3),
-                     "label": "machine goal candidate (ball carried past keeper)"})
-    rows.append({"t_seconds": t, "type": "shot", "team": s.get("team"), "confidence": conf, "label": label})
+                     "label": "machine goal candidate" + (" (ball into the net)" if src == "goal_mouth" else " (ball carried past keeper)")})
+    shot_label = {"on_target": "machine shot on target", "off_target": "machine shot off target", "save": "machine shot (saved)",
+                  "goal?": "machine shot"}.get(out, label)
+    rows.append({"t_seconds": t, "type": "shot", "team": s.get("team"), "confidence": conf, "label": shot_label})
     if out == "save":
         rows.append({"t_seconds": t, "type": "save", "team": other(s.get("team")), "confidence": conf,
                      "label": "machine save candidate"})
     return rows
+
+
+def machine_on_target(s):
+    """True/False when the outcome says so, else None (feeds shots.on_target for the stats)."""
+    out = s.get("outcome")
+    if out in ("on_target", "save", "goal?"):
+        return True
+    if out == "off_target":
+        return False
+    return None
 
 
 def pass_rows(game_id, run_id, events):
@@ -112,9 +125,15 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
     # Machine locations go on the shots table as proposals, marked 'machine'.
     from analyzer.xg import compute_xg, MODEL_VERSION
     L = float(pitch[0] or 105); W = float(pitch[1] or 68)
+    by_t = {round(float(x["t"]), 1): x for x in shot_tags}
     for tag in inserted:
+        if tag["type"] != "shot":
+            continue
         loc = shot_locations.get(round(float(tag["t_seconds"]), 1))
+        ot = machine_on_target(by_t.get(round(float(tag["t_seconds"]), 1), {}))
         if not loc:
+            if ot is not None:
+                c.table("shots").upsert({"game_id": game_id, "tag_id": tag["id"], "team": tag["team"], "on_target": ot, "is_goal": False}, on_conflict="tag_id").execute()
             continue
         c.table("shots").upsert({
             "game_id": game_id, "tag_id": tag["id"], "team": tag["team"],

@@ -83,11 +83,23 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2):
         res.update({"goal_px": rect, "kh": kh, "range_h": round(dist0, 1)})
         if dist0 > 30:
             out.append(res); continue
-        entered_t, off_t, near_keeper_after = None, None, False
+        entered_t, off_t, near_keeper_after, crossed_front = None, None, False, False
+        inside = lambda p: rect[0] - 0.15 * kh <= p[0] <= rect[2] + 0.15 * kh and rect[1] - 0.15 * kh <= p[1] <= rect[3] + 0.3 * kh
+        entry_side = None
         for (ta, pa), (tb, pb) in zip(balls, balls[1:]):
-            if _seg_intersects_rect(pa, pb, rect, pad=0.15 * kh) or (rect[0] <= pb[0] <= rect[2] and rect[1] <= pb[1] <= rect[3]):
-                entered_t = entered_t or tb
-            elif _seg_intersects_rect(pa, pb, rect, pad=1.5 * kh) and entered_t is None:
+            if entered_t is None and (_seg_intersects_rect(pa, pb, rect, pad=0.15 * kh) or inside(pb)):
+                # a ball well below the goal line is on the pitch in front of the goal, not in the mouth
+                if pb[1] > rect[3] + 0.6 * kh:
+                    continue
+                entered_t = tb
+                entry_side = "left" if pa[0] < (rect[0] + rect[2]) / 2 else "right"
+            elif entered_t is not None and not inside(pb):
+                # left the mouth region again while still visible: passed across the front (a cross / clearance)
+                exit_side = "left" if pb[0] < (rect[0] + rect[2]) / 2 else "right"
+                if exit_side != entry_side and (tb - entered_t) < 1.0:
+                    crossed_front = True
+                break
+            elif entered_t is None and _seg_intersects_rect(pa, pb, rect, pad=1.5 * kh):
                 off_t = off_t or tb
         if entered_t is not None:
             # keeper collects? ball seen within 0.8 kh of the keeper after entering
@@ -100,7 +112,9 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2):
                                 near_keeper_after = True
             last_seen = balls[-1][0]
             gone = (t_kick + horizon_s) - last_seen >= 1.2 and abs(last_seen - entered_t) < 0.8
-            if near_keeper_after:
+            if crossed_front:
+                res["outcome"] = "cross"
+            elif near_keeper_after:
                 res["outcome"] = "save"
             elif gone:
                 res["outcome"] = "goal?"

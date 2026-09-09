@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Match Film analyzer. Usage: python analyze.py --game-id <uuid> [--backend local|cloud]"""
 import argparse
+import collections
 import json
 import os
 import sys
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()                                                            # analyzer/.env (may be Dropbox-synced)
 load_dotenv(os.path.expanduser("~/.config/matchfilm/.env"), override=True)  # per-machine secrets, never synced
 
-from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp, passes  # noqa: E402
+from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp, passes, goalshots  # noqa: E402
 
 MODEL_VERSION = "mf-analyzer-0.1"
 
@@ -151,8 +152,35 @@ def main() -> int:
             if ts_row["period"] == "full":
                 ts_row.update({"passes": pass_summary[ts_row["team"]]["passes"], "passes_completed": pass_summary[ts_row["team"]]["passes_completed"], "ball_coverage": ball_cov})
         shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
-        more, kick_cands = shots.classify_by_keeper(kick_cands, dets, fps=args.fps)
-        shot_cands = sorted(shot_cands + more, key=lambda c: c["t"])
+        # Goal-mouth classification against the goal frame found in the image (best precision).
+        try:
+            vpath = path or fetch.download(main_video["youtube_id"], max_height=args.max_height)
+            import cv2
+            cap = cv2.VideoCapture(vpath); src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            fcache = {}
+            def frame_at(t):
+                k = round(t, 1)
+                if k not in fcache:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps))); ok, img = cap.read(); fcache[k] = img if ok else None
+                    if len(fcache) > 80: fcache.pop(next(iter(fcache)))
+                return fcache[k]
+            gres = goalshots.classify(kick_cands, dets, frame_at, fps=args.fps)
+            cap.release()
+        except Exception as e:  # noqa: BLE001
+            print("goal-mouth classification skipped:", str(e)[:120]); gres = [{**c, "outcome": "kick"} for c in kick_cands]
+        geo_shots = [g for g in gres if g["outcome"] in ("on_target", "off_target", "save", "goal?")]
+        rest = [g for g in gres if g["outcome"] in ("kick", "shot")]
+        crosses = [g for g in gres if g["outcome"] == "cross"]
+        for g in geo_shots:
+            g["confidence"] = round(min(0.95, 0.55 + 0.1 * min(3, g.get("goal_hits", 1))), 3)
+            g["source"] = "goal_mouth"
+        print(f"goal-mouth: {len(geo_shots)} shots ({collections.Counter(g['outcome'] for g in geo_shots)}), {len(crosses)} crosses, {len(rest)} unresolved")
+        # keeper-approach fallback for kicks the goal detector could not resolve
+        more, kick_cands = shots.classify_by_keeper([{k: v for k, v in g.items() if k not in ('outcome',)} for g in rest], dets, fps=args.fps)
+        for m in more:
+            m["source"] = "keeper"
+        shot_cands = sorted(shot_cands + geo_shots + more, key=lambda c: c["t"])
+        kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses]
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = {round(s["t"], 1): s["location"] for s in shot_cands if s.get("location")}
 
