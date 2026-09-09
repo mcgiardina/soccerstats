@@ -56,20 +56,41 @@ def field_colour(img):
     if hit is not None and hit[0] is img:
         return hit[1]
     h, w = img.shape[:2]
-    patch = img[int(h * 0.55):int(h * 0.9):4, int(w * 0.3):int(w * 0.7):4]
-    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3)
-    med = tuple(int(v) for v in np.median(hsv, axis=0))
+    # Six patches across the lower-middle band; keep the ones that look like a playing surface
+    # (green through yellowed grass), so a camera pole, the crowd or a tent can't hijack the estimate.
+    meds = []
+    for ry in ((0.45, 0.65), (0.65, 0.88)):
+        for rx in ((0.12, 0.38), (0.38, 0.62), (0.62, 0.88)):
+            patch = img[int(h * ry[0]):int(h * ry[1]):4, int(w * rx[0]):int(w * rx[1]):4]
+            hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+            m = np.median(hsv, axis=0)
+            if 15 <= m[0] <= 95 and m[1] >= 35 and m[2] >= 50:
+                meds.append(m)
+    if meds:
+        med = tuple(int(v) for v in np.median(np.array(meds), axis=0))
+    else:
+        med = (50, 120, 130)   # generic green fallback
     if len(_FIELD_CACHE) > 8:
         _FIELD_CACHE.clear()
     _FIELD_CACHE[key] = (img, med)
     return med
 
 
+ADAPTIVE_FIELD = True   # False = the original fixed green test (hue 30-95, sat > 40)
+
+
 def is_field_pixel(hsv, field):
+    """Field = the original green rule OR a band around the measured surface hue. The union keeps
+    the validated behaviour on green pitches (adaptive-only skewed possession on the Dynamo game)
+    and adds yellowed grass / turf."""
+    green = (hsv[:, 0] > 30) & (hsv[:, 0] < 95) & (hsv[:, 1] > 40) & (hsv[:, 2] > 40)
+    if not ADAPTIVE_FIELD:
+        return green
     fh, fs, _ = field
     dh = np.abs(hsv[:, 0].astype(int) - fh)
     dh = np.minimum(dh, 180 - dh)
-    return (dh <= 14) & (hsv[:, 1] >= max(25, 0.4 * fs)) & (hsv[:, 2] > 40)
+    adaptive = (dh <= 14) & (hsv[:, 1] >= max(40, 0.4 * fs)) & (hsv[:, 2] > 40)
+    return green | adaptive
 
 
 def on_grass(img, box, min_field=0.45):
