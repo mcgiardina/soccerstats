@@ -19,7 +19,10 @@ def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, min_hold_s=2.0, max_
             dist = np.hypot(fx - bx, fy - by)
             if dist < bd:
                 best, bd = p, dist
-        if best is None or bd > max_dist_px:
+        # "has the ball" radius scales with how big players look in this frame (camera-independent)
+        med_h = float(np.median([p[3] - p[1] for p in d.players]))
+        limit = max(60.0, min(max_dist_px * 2, 2.0 * med_h))
+        if best is None or bd > limit:
             raw.append((d.t, None)); continue
         cached = getattr(d, "labels", None)
         raw.append((d.t, cached[best[4]] if cached is not None else label_of(d.img, best)))
