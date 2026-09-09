@@ -33,7 +33,14 @@ def compute(dets, label_of, offsets, fps=5.0, smooth_s=1.5, min_hold_s=2.0, max_
         w = [t for t in teams[lo:hi] if t]
         if not w:
             voted.append(None); continue
-        voted.append(max(set(w), key=w.count))
+        n_us, n_them = w.count("us"), w.count("them")
+        if n_us != n_them:
+            voted.append("us" if n_us > n_them else "them")
+        else:
+            # Tie: keep continuity with the previous vote, else this frame's own attribution.
+            # (Never break ties by set order: that varies per process and moved possession ±5 pts.)
+            prev = voted[-1] if voted else None
+            voted.append(prev or teams[i] or "us")
 
     # Hysteresis: the holder only changes once the other team has been attributed for a
     # sustained stretch. Brief flickers while the ball is between players are not turnovers.
