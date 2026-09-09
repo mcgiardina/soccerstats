@@ -59,6 +59,11 @@ Overnight findings on the two BallerCam games (Sept 2026):
   on grass (`detect.ball_on_pitch`). YOLO-World's "soccer ball" sees the ball in ~85% of
   shot-window frames against ~75% for the stock pair and is merged in by continuity.
 - Crowd-noise audio peaks and pitch-keypoint goal-line landmarks did not help (dropped).
+- On the older XbotGo samples (camera at midfield, 720p) the far goal is a few pixels tall
+  and YOLO-World does not see it, so those games only get the keeper-approach fallback.
+  The BallerCam view (higher, tighter pan) is the one this pipeline is tuned for.
+- Kicks the goal-mouth judge rules out (goal in view, ball tracked, never near it) are no
+  longer proposed as tags; the keeper-approach test runs only when the goal was not in view.
 
 Never runs automatically. The web app's "Queue analysis run" button only inserts a
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).
