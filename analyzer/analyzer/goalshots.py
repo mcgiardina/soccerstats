@@ -41,6 +41,32 @@ def _seg_intersects_rect(p, q, rect, pad=0.0):
     return True
 
 
+# A ball does not move faster than this in the image; a point that is farther than that from
+# both its neighbours is another object (a keeper's sock, a cone) and is dropped.
+MAX_BALL_SPEED_PX_S = 2500.0
+
+
+def _drop_teleports(track, max_speed=MAX_BALL_SPEED_PX_S):
+    """track: [(t, (x, y)), ...] sorted by t. Removes isolated points until the track is stable."""
+    pts = list(track)
+    changed = True
+    while changed and len(pts) >= 2:
+        changed = False
+        keep = []
+        for i, (t, p) in enumerate(pts):
+            far = []
+            for j in (i - 1, i + 1):
+                if 0 <= j < len(pts):
+                    tj, pj = pts[j]
+                    far.append(np.hypot(p[0] - pj[0], p[1] - pj[1]) > max_speed * max(0.05, abs(t - tj)))
+            if far and all(far):
+                changed = True
+                continue
+            keep.append((t, p))
+        pts = keep
+    return pts
+
+
 def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=None):
     """kicks: candidate dicts with 't' (= kick time - PRE_ROLL). frame_at(t) -> BGR image or None.
     finder: goalworld.GoalFinder (default: shared instance; falls back to the crossbar detector).
@@ -121,6 +147,7 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
             prev = pick
             ax, ay = anchor_at(d.t)
             balls.append((d.t, (pick[0] - ax, pick[1] - ay)))
+        balls = _drop_teleports(balls)
         if len(balls) < 2:
             out.append(res); continue
         res["ball_track"] = [(round(t, 1), round(p[0] + anchor_at(t)[0], 1), round(p[1] + anchor_at(t)[1], 1)) for t, p in balls]
