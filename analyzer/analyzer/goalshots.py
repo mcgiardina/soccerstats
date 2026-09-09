@@ -56,7 +56,7 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
         # goal mouth per frame (the camera pans, so the goal moves in the image); a few agreeing
         # frames are required, and the ball is judged in goal-relative coordinates.
         hits = []
-        for d in win[::2]:
+        for d in (win if finder is not None else win[::2]):
             if finder is None and not d.keepers:
                 continue
             img = frame_at(d.t)
@@ -72,14 +72,16 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                 if g:
                     hits.append((d.t, g)); break
         res = {**c, "outcome": "kick"}
-        if len(hits) < 2:
+        # the goal has to be in view for a fair share of the window, not just as the pan ends
+        min_hits = max(3, int(0.3 * len(win))) if finder is not None else 2
+        if len(hits) < min_hits:
             out.append(res); continue
         med_w = float(np.median([h["right"] - h["left"] for _, h in hits]))
         med_h = float(np.median([h["bottom"] - h["top"] for _, h in hits]))
         kh = float(np.median([h["kh"] for _, h in hits]))
         # drop outliers in size (the goal on the next pitch, a partial detection)
         agree = [(t, h) for t, h in hits if abs((h["right"] - h["left"]) - med_w) < 0.35 * med_w and abs((h["bottom"] - h["top"]) - med_h) < 0.5 * med_h]
-        if len(agree) < 2:
+        if len(agree) < min_hits:
             out.append(res); continue
         ht = np.array([t for t, _ in agree])
         hcx = np.array([(h["left"] + h["right"]) / 2 for _, h in agree])
@@ -87,6 +89,11 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
 
         def anchor_at(t):
             return float(np.interp(t, ht, hcx)), float(np.interp(t, ht, hby))
+
+        def anchored(t, tol=0.45):
+            """The interpolated goal position is only trustworthy near an actual detection
+            (the camera pans; extrapolating past the first/last hit puts the goal on empty grass)."""
+            return bool(np.min(np.abs(ht - t)) <= tol)
 
         # goal-relative frame: origin at the centre of the goal line, y up is negative
         rect = (-med_w / 2, -med_h, med_w / 2, 0.0)
@@ -96,6 +103,8 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
         balls = []
         prev = None
         for d in win:
+            if not anchored(d.t):
+                continue
             cands = [(d.ball[0], d.ball[1], 0.5)] if d.ball else []
             if finder is not None:
                 img = frame_at(d.t)
@@ -103,11 +112,12 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                     cands += [(b[0], b[1], b[2]) for b in finder.balls(img)]
             if not cands:
                 continue
-            if prev is not None:
-                near = [b for b in cands if np.hypot(b[0] - prev[0], b[1] - prev[1]) <= 6.0 * kh]
-                pick = max(near, key=lambda b: b[2]) if near else max(cands, key=lambda b: b[2])
-            else:
-                pick = max(cands, key=lambda b: b[2])
+            # the ball we want is the one that continues the track, or failing that the one
+            # nearest the goal: a white shoe on the bench or a bright patch in the tree line
+            # scores well on confidence but not on either
+            ax_, ay_ = anchor_at(d.t)
+            ref = prev if prev is not None else (ax_, ay_)
+            pick = max(cands, key=lambda b: b[2] - 0.6 * min(2.0, np.hypot(b[0] - ref[0], b[1] - ref[1]) / (8.0 * kh)))
             prev = pick
             ax, ay = anchor_at(d.t)
             balls.append((d.t, (pick[0] - ax, pick[1] - ay)))

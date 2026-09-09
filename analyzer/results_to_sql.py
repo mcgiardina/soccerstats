@@ -62,7 +62,8 @@ for c in sorted(r.get("shot_candidates", []), key=lambda c: c["t"]):
         shot_rows.append(f"('{game_id}','{tid}',{team(c.get('team'))},{round(loc['x'], 3)},{round(loc['y'], 3)},'machine',{loc['confidence']},{q(ot)},false,{compute_xg(loc['x'], loc['y'], L, W)},'{MODEL_VERSION}')")
     elif ot is not None:
         shot_rows.append(f"('{game_id}','{tid}',{team(c.get('team'))},null,null,null,null,{q(ot)},false,null,null)")
-kicks = sorted(r.get("kick_candidates", []), key=lambda c: -c["confidence"])
+# kicks the goal-mouth judge ruled out (goal in view, ball tracked, never near it) are not proposed
+kicks = sorted([c for c in r.get("kick_candidates", []) if c.get("outcome") != "kick"], key=lambda c: -c["confidence"])
 if top_n:
     kicks = kicks[:top_n]
 for c in sorted(kicks, key=lambda c: c["t"]):

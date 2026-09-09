@@ -24,7 +24,7 @@ KH_PER_GOAL_H = 0.6
 
 
 class GoalFinder:
-    def __init__(self, device="mps", conf=0.2, ball_conf=0.3, imgsz=1280):
+    def __init__(self, device="mps", conf=0.2, ball_conf=0.2, imgsz=1280, ball_imgsz=1920):
         from ultralytics import YOLO
         os.makedirs(WEIGHTS_DIR, exist_ok=True)
         saved = os.path.join(WEIGHTS_DIR, SAVED)
@@ -38,13 +38,10 @@ class GoalFinder:
             finally:
                 os.chdir(cwd)
         self.model = YOLO(saved)
-        self.device, self.conf, self.ball_conf, self.imgsz = device, conf, ball_conf, imgsz
+        self.device, self.conf, self.ball_conf, self.imgsz, self.ball_imgsz = device, conf, ball_conf, imgsz, ball_imgsz
 
-    def detect(self, img):
-        """One pass: (goal boxes, ball candidates). Cached per image object."""
-        if getattr(self, "_last", None) is not None and self._last[0] is img:
-            return self._last[1]
-        r = self.model.predict(img, imgsz=self.imgsz, conf=min(self.conf, self.ball_conf), device=self.device, verbose=False)[0]
+    def _predict(self, img, imgsz):
+        r = self.model.predict(img, imgsz=imgsz, conf=min(self.conf, self.ball_conf), device=self.device, verbose=False)[0]
         goals, balls = [], []
         for c, s, b in zip(r.boxes.cls.tolist(), r.boxes.conf.tolist(), r.boxes.xyxy.tolist()):
             x1, y1, x2, y2 = [float(v) for v in b]
@@ -55,6 +52,17 @@ class GoalFinder:
                     goals.append({"left": x1, "top": y1, "right": x2, "bottom": y2, "score": float(s)})
             elif s >= self.ball_conf and max(w, h) <= 60:
                 balls.append(((x1 + x2) / 2, (y1 + y2) / 2, float(s), max(w, h)))
+        return goals, balls
+
+    def detect(self, img):
+        """(goal boxes, ball candidates) for this frame, cached per image object. Goals are
+        best at 1280 input (confidence halves at 1920); the tiny ball is best at 1920, so a
+        second pass at that size runs only when the first one saw no ball."""
+        if getattr(self, "_last", None) is not None and self._last[0] is img:
+            return self._last[1]
+        goals, balls = self._predict(img, self.imgsz)
+        if not balls and self.ball_imgsz and self.ball_imgsz != self.imgsz:
+            balls = self._predict(img, self.ball_imgsz)[1]
         self._last = (img, (goals, balls))
         return goals, balls
 

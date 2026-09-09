@@ -109,6 +109,9 @@ def main() -> int:
             path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
             frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
             dets = detect.run(frames, backend=args.backend)
+            if args.limit_seconds is None:
+                # detections are the expensive part: cache them before anything that can fail
+                detect.save_cache(cache_path, dets, args.fps)
             us_cluster = {"A": 0, "B": 1}.get(args.us_cluster) if args.us_cluster else None
             assign = teams.assign(dets, game_id=args.game_id, force_confirm=args.confirm_team, us_cluster=us_cluster)
             if assign is None:
@@ -169,18 +172,26 @@ def main() -> int:
         except Exception as e:  # noqa: BLE001
             print("goal-mouth classification skipped:", str(e)[:120]); gres = [{**c, "outcome": "kick"} for c in kick_cands]
         geo_shots = [g for g in gres if g["outcome"] in ("on_target", "off_target", "save", "goal?")]
-        rest = [g for g in gres if g["outcome"] in ("kick", "shot")]
+        geo_unresolved = [g for g in gres if g["outcome"] == "shot"]
+        # goal in view and the ball tracked through the window but never near the goal: a
+        # trusted "not a shot", so the weaker keeper-approach test must not override it
+        trusted_kicks = [g for g in gres if g["outcome"] == "kick" and g.get("ball_track")]
+        rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track")]
         crosses = [g for g in gres if g["outcome"] == "cross"]
         for g in geo_shots:
             g["confidence"] = round(min(0.95, 0.55 + 0.1 * min(3, g.get("goal_hits", 1))), 3)
             g["source"] = "goal_mouth"
-        print(f"goal-mouth: {len(geo_shots)} shots ({collections.Counter(g['outcome'] for g in geo_shots)}), {len(crosses)} crosses, {len(rest)} unresolved")
-        # keeper-approach fallback for kicks the goal detector could not resolve
+        for g in geo_unresolved:
+            g["confidence"] = 0.6
+            g["source"] = "goal_mouth"
+        print(f"goal-mouth: {len(geo_shots)} shots ({collections.Counter(g['outcome'] for g in geo_shots)}), {len(geo_unresolved)} unresolved shots, "
+              f"{len(crosses)} crosses, {len(trusted_kicks)} kicks ruled out, {len(rest)} without a goal in view")
+        # keeper-approach fallback only for kicks where the goal was not in view
         more, kick_cands = shots.classify_by_keeper([{k: v for k, v in g.items() if k not in ('outcome',)} for g in rest], dets, fps=args.fps)
         for m in more:
             m["source"] = "keeper"
-        shot_cands = sorted(shot_cands + geo_shots + more, key=lambda c: c["t"])
-        kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses]
+        shot_cands = sorted(shot_cands + geo_shots + geo_unresolved + more, key=lambda c: c["t"])
+        kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses] + [{k: v for k, v in g.items() if k != "ball_track"} for g in trusted_kicks]
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = {round(s["t"], 1): s["location"] for s in shot_cands if s.get("location")}
 

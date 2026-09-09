@@ -93,6 +93,44 @@ def is_field_pixel(hsv, field):
     return green | adaptive
 
 
+_PITCH_CACHE = {}
+
+
+def pitch_mask(img, scale=4, dilate_px=40):
+    """Coarse mask of the playing surface: the largest connected grass component, closed so
+    players and lines are filled, then dilated (goal frame, ball in the air near the goal).
+    The tree line, the sky and the far side of a parking lot are separate components."""
+    key = id(img)
+    hit = _PITCH_CACHE.get(key)
+    if hit is not None and hit[0] is img:
+        return hit[1]
+    h, w = img.shape[:2]
+    small = cv2.resize(img, (w // scale, h // scale), interpolation=cv2.INTER_AREA)
+    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    m = is_field_pixel(hsv, field_colour(img)).reshape(small.shape[:2]).astype(np.uint8)
+    k = max(3, 24 // scale)
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    if n <= 1:
+        out = np.ones(small.shape[:2], dtype=bool)
+    else:
+        biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        out = lab == biggest
+        d = max(1, dilate_px // scale)
+        out = cv2.dilate(out.astype(np.uint8), np.ones((d, d), np.uint8)).astype(bool)
+    _PITCH_CACHE.clear()
+    _PITCH_CACHE[key] = (img, (out, scale))
+    return out, scale
+
+
+def in_pitch(img, x, y):
+    mask, scale = pitch_mask(img)
+    yy, xx = int(y) // scale, int(x) // scale
+    if 0 <= yy < mask.shape[0] and 0 <= xx < mask.shape[1]:
+        return bool(mask[yy, xx])
+    return False
+
+
 def on_grass(img, box, min_field=0.45):
     """True when the strip just below the box is mostly playing surface: a player on the pitch,
     not a spectator under a tent or someone behind the fence. Surface colour is measured
@@ -227,6 +265,10 @@ def _write_preview(dets, refs, labels):
 
 
 def _confirm():
+    if not sys.stdin.isatty():
+        print("no terminal to confirm the team: assuming cluster A is us (check team_preview.jpg; "
+              "pass --us-cluster or --relabel to fix)")
+        return 0
     while True:
         ans = input("Which cluster is us? [A/B]: ").strip().upper()
         if ans in ("A", "B"):

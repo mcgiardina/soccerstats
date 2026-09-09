@@ -115,6 +115,7 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
     existing = c.table("tags").select("t_seconds,type").eq("game_id", game_id).execute().data
     taken = [float(t["t_seconds"]) for t in existing if t["type"] in ("shot", "goal", "penalty")]
     rows = []
+    kick_tags = [k for k in kick_tags if k.get("outcome") != "kick"]   # ruled out by the goal-mouth judge
     for s, label in [(x, "machine shot candidate") for x in shot_tags] + [(x, "machine kick candidate") for x in kick_tags]:
         # Don't propose a shot within 4 s of one a human already tagged.
         if any(abs(s["t"] - t) < 4 for t in taken):

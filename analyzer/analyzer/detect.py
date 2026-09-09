@@ -63,7 +63,9 @@ def ball_on_pitch(img, cx, cy, half=None, min_field=0.35):
     """A ball is on the playing surface: the ring around it is mostly grass. Rejects the sky,
     the tree line, floodlight heads and spectators' white shoes, which the ball detectors
     mistake for the ball on panned footage (Lady Revo game: most cached balls were in the sky)."""
-    from analyzer.teams import field_colour, is_field_pixel
+    from analyzer.teams import field_colour, is_field_pixel, in_pitch
+    if not in_pitch(img, cx, cy):
+        return False
     h, w = img.shape[:2]
     half = int(half or 18)
     x1, x2 = max(0, int(cx) - 2 * half), min(w, int(cx) + 2 * half)
