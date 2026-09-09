@@ -70,7 +70,12 @@ for c in sorted(kicks, key=lambda c: c["t"]):
     lab = "machine cross candidate" if c.get("outcome") == "cross" else "machine kick candidate"
     tag_rows.append(f"('{uuid.uuid4()}','{game_id}','{video_id}',{round(c['t'], 1)},'shot',{team(c.get('team'))},'{lab}','machine',{round(c['confidence'], 3)})")
 if tag_rows:
-    out.append("insert into tags (id, game_id, video_id, t_seconds, type, team, label, source, confidence) values\n " + ",\n ".join(tag_rows) + ";")
+    # Same rule as db.write_results: never propose within 4 s of a shot a human tagged or already
+    # reviewed (an accepted or rejected proposal from an earlier run is a human decision).
+    guard = (f"where not exists (select 1 from tags x where x.game_id = '{game_id}' and x.type in ('shot','goal','penalty') "
+             f"and (x.source = 'human' or x.confirmed is not null) and abs(x.t_seconds - v.t_seconds) < 4)")
+    out.append("insert into tags (id, game_id, video_id, t_seconds, type, team, label, source, confidence)\n"
+               "select v.* from (values\n " + ",\n ".join(tag_rows) + "\n) as v(id, game_id, video_id, t_seconds, type, team, label, source, confidence) " + guard + ";")
 if shot_rows:
     out.append("insert into shots (game_id, tag_id, team, pitch_x, pitch_y, location_source, location_confidence, on_target, is_goal, xg, xg_model_version) values\n " + ",\n ".join(shot_rows) + ";")
 
