@@ -18,6 +18,25 @@ from analyzer import db, fetch, video, detect, teams, possession, shots, homogra
 MODEL_VERSION = "mf-analyzer-0.1"
 
 
+def diagnostics(path, frames):
+    """Versions, device and what the sampled video looked like, stored in the run params."""
+    import platform
+    d = {"python": platform.python_version(), "machine": platform.node()}
+    try:
+        import torch, ultralytics, cv2
+        d.update({"torch": torch.__version__, "ultralytics": ultralytics.__version__, "opencv": cv2.__version__,
+                  "mps": bool(getattr(torch.backends, "mps", None) and torch.backends.mps.is_available())})
+        cap = cv2.VideoCapture(path)
+        d.update({"video_fps": round(cap.get(cv2.CAP_PROP_FPS), 3), "video_frames": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+                  "video_w": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), "video_h": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                  "video_bytes": os.path.getsize(path)})
+        cap.release()
+    except Exception as e:  # noqa: BLE001
+        d["error"] = str(e)[:120]
+    d.update({"sampled": len(frames), "first_t": round(frames[0].t, 3) if frames else None, "last_t": round(frames[-1].t, 3) if frames else None})
+    return d
+
+
 def run_queue(poll_seconds: int, backend: str) -> int:
     """Worker mode for a spare Mac: process runs the admin has queued from the app, oldest first.
     Nothing starts unless a human pressed "Queue analysis run"; this just executes that queue.
@@ -108,6 +127,9 @@ def main() -> int:
         else:
             path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
             frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
+            # what this machine saw: lets two runs of the same game (laptop vs mini) be compared
+            if not args.dry_run:
+                db.update_run_params(run["id"], {"diag": diagnostics(path, frames)})
             dets = detect.run(frames, backend=args.backend)
             if args.limit_seconds is None:
                 # detections are the expensive part: cache them before anything that can fail
@@ -122,7 +144,9 @@ def main() -> int:
                 detect.save_cache(cache_path, dets, args.fps)
 
         if assign is not None and getattr(teams.assign, "us_cluster", None) is not None:
-            choice = {"us_cluster": "AB"[teams.assign.us_cluster], "team_pick": getattr(teams.assign, "method", None)}
+            choice = {"us_cluster": "AB"[teams.assign.us_cluster], "team_pick": getattr(teams.assign, "method", None),
+                      "kits": getattr(teams.assign, "kits", None),
+                      "ball_frames": sum(1 for d in dets if d.ball), "attributed_frames": sum(1 for d in dets if any(d.labels or []))}
             params.update(choice)
             if not args.dry_run:
                 db.update_run_params(run["id"], choice)

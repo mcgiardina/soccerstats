@@ -210,6 +210,9 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     cluster_centers = C
 
     _write_preview(dets, refs, labels)
+    raw_all = np.array(raw_bgr, dtype=float)
+    assign.kits = [{"cluster": "AB"[k], "bgr": [int(v) for v in np.median(raw_all[labels == k], axis=0)], "samples": int((labels == k).sum())} for k in (0, 1)]
+    assign.kits.append({"separation": round(float(ratio), 2), "samples_total": int(len(feats))})
     assign.method = "flag" if us_cluster is not None else None
     if us_cluster is None and not force_confirm:
         us_cluster = db.get_team_choice(game_id)
@@ -217,8 +220,7 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     if us_cluster is None:
         # unattended (the Mac mini worker): match the two kits to the colour set on the game
         kit = db.get_kit_color(game_id)
-        raw = np.array(raw_bgr, dtype=float)
-        kits = [np.median(raw[labels == k], axis=0) for k in (0, 1)]
+        kits = [np.median(raw_all[labels == k], axis=0) for k in (0, 1)]
         pick = _pick_by_colour(kits, kit) if kit else None
         if pick is not None:
             us_cluster = pick
