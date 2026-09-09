@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import PitchMap from "./PitchMap";
 import type { Shot, Tag, Team } from "../lib/types";
 import { computeXg, XG_MODEL_VERSION, CONTEXT_LABELS, ASSIST_LABELS, type ShotContext, type ShotAssist } from "../lib/xg";
+import { useTeamNames } from "../lib/team";
 
 interface Props {
   tag: Tag;
@@ -10,10 +11,12 @@ interface Props {
   pitch: { lengthM: number; widthM: number };
   onSave: (shot: Partial<Shot>) => Promise<void>;
   onClose: () => void;
+  opponent?: string | null;
 }
 
-export default function ShotPlacer({ tag, existing, pitch, onSave, onClose }: Props) {
+export default function ShotPlacer({ tag, existing, pitch, onSave, onClose, opponent }: Props) {
   const team: Team = tag.team ?? "us";
+  const names = useTeamNames(opponent);
   const [pos, setPos] = useState<[number, number] | null>(
     existing?.pitch_x != null && existing.pitch_y != null ? [existing.pitch_x, existing.pitch_y] : null,
   );
@@ -52,9 +55,9 @@ export default function ShotPlacer({ tag, existing, pitch, onSave, onClose }: Pr
   }
 
   return (
-    <Modal onClose={onClose} title={`${isGoal ? "Goal" : "Shot"} location · ${team === "us" ? "us" : "them"}`}>
+    <Modal onClose={onClose} title={`${isGoal ? "Goal" : "Shot"} location · ${names.of(team)}`}>
       <p className="small muted">Click where the shot was taken. Esc to skip; you can place it later from the tag list.</p>
-      <PitchMap shots={preview} onPick={(x, y) => setPos([x, y])} pickTeam={team} />
+      <PitchMap shots={preview} onPick={(x, y) => setPos([x, y])} pickTeam={team} attackLabel={`${names.of(team)} attack ${team === "us" ? "→" : "←"}`} />
       <div className="placer-opts">
         <div className="seg light">
           {(Object.keys(CONTEXT_LABELS) as ShotContext[]).map((k) => <button key={k} className={context === k ? "on" : ""} onClick={() => setContext(k)}>{CONTEXT_LABELS[k]}</button>)}

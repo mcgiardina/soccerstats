@@ -33,7 +33,7 @@ export default function OpponentPage() {
       <h1>vs {name}</h1>
       <p className="muted small">{games.length} game{games.length === 1 ? "" : "s"} · {record.w}W {record.d}D {record.l}L · GF {record.gf} GA {record.ga}</p>
       {shots.some((s) => s.pitch_x != null) ? (
-        <div className="card"><h3>All shots across these games</h3><div className="pitch-wrap"><PitchMap shots={shots} /></div><div className="tiny muted">We attack →, they attack ←. Gold ring = goal. Look for patterns: where do they hurt us, where do we get chances.</div></div>
+        <div className="card"><h3>All shots across these games</h3><div className="pitch-wrap"><PitchMap shots={shots} /></div><div className="tiny muted">We attack →, {name} attack ←. Gold ring = goal. Look for patterns: where do they hurt us, where do we get chances.</div></div>
       ) : null}
       {games.map((g) => {
         const v = mainVideo(g.videos);

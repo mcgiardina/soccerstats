@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import type { SetPieceOutcome, Tag, TagType, Team } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS } from "../lib/types";
 import { fmtClock } from "../lib/time";
+import { useTeamNames } from "../lib/team";
 
 interface Props {
   tag: Partial<Tag> & { t_seconds: number; type: TagType };
@@ -10,9 +11,11 @@ interface Props {
   onClose: () => void;
   /** Quick mode: opened right after a hotkey; only asks what is needed. */
   quick?: boolean;
+  opponent?: string | null;
 }
 
-export default function TagEditor({ tag, onSave, onClose, quick }: Props) {
+export default function TagEditor({ tag, onSave, onClose, quick, opponent }: Props) {
+  const names = useTeamNames(opponent);
   const [type, setType] = useState<TagType>(tag.type);
   const [team, setTeam] = useState<Team>(tag.team ?? "us");
   const [outcome, setOutcome] = useState<SetPieceOutcome | "">(tag.outcome ?? "");
@@ -26,7 +29,7 @@ export default function TagEditor({ tag, onSave, onClose, quick }: Props) {
   }
 
   return (
-    <Modal onClose={onClose} title={quick ? `${TAG_LABELS[type]} · ${team}` : "Edit tag"}>
+    <Modal onClose={onClose} title={quick ? `${TAG_LABELS[type]} · ${names.of(team)}` : "Edit tag"}>
       {!quick ? (
         <div className="form-grid">
           <label className="field"><span>Type</span>
@@ -35,7 +38,7 @@ export default function TagEditor({ tag, onSave, onClose, quick }: Props) {
             </select>
           </label>
           <label className="field"><span>Team</span>
-            <select value={team} onChange={(e) => setTeam(e.target.value as Team)}><option value="us">us</option><option value="them">them</option></select>
+            <select value={team} onChange={(e) => setTeam(e.target.value as Team)}><option value="us">{names.us}</option><option value="them">{names.them}</option></select>
           </label>
           <label className="field"><span>Video time (seconds) · {fmtClock(t)}</span>
             <input type="number" step="0.5" value={t} onChange={(e) => setT(Number(e.target.value))} />

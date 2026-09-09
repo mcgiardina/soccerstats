@@ -50,14 +50,14 @@ function Chart({ title, data, a, b, aName, bName, unit }: { title: string; data:
   );
 }
 
-export default function TrendCharts({ data }: { data: TrendPoint[] }) {
+export default function TrendCharts({ data, usName = "us" }: { data: TrendPoint[]; usName?: string }) {
   if (data.length < 2) return null;
   return (
     <div className="charts">
       <Chart title="Goals" data={data} a="goalsFor" b="goalsAgainst" aName="for" bName="against" />
       <Chart title="Shots" data={data} a="shotsFor" b="shotsAgainst" aName="for" bName="against" />
       <Chart title="xG (pro-calibrated proxy)" data={data} a="xgFor" b="xgAgainst" aName="for" bName="against" />
-      <Chart title="Possession (machine ≈)" data={data} a="possession" aName="us %" unit="%" />
+      <Chart title="Possession (machine ≈)" data={data} a="possession" aName={`${usName} %`} unit="%" />
     </div>
   );
 }

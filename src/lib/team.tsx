@@ -97,3 +97,18 @@ export function useShow() {
   const t = useTeam();
   return (key: string) => t.canSeeAll || !t.hidden.has(key);
 }
+
+
+/** Compact display name for an opponent: drop a "TEST " prefix and any parenthetical, cap the length. */
+export function shortOpponent(name: string, max = 16): string {
+  let n = name.replace(/^TEST\s+/i, "").replace(/\s*\(.*?\)\s*/g, " ").trim();
+  if (n.length > max) n = n.slice(0, max - 1).trimEnd() + "…";
+  return n || name;
+}
+
+/** Names to print instead of "us" / "them" for a given game. */
+export function useTeamNames(opponent: string | null | undefined) {
+  const t = useTeam();
+  const them = opponent ? shortOpponent(opponent) : "Them";
+  return { us: t.shortName, them, full: { us: t.name, them: opponent ?? "Them" }, of: (side: "us" | "them" | null | undefined) => (side === "us" ? t.shortName : side === "them" ? them : "—") };
+}

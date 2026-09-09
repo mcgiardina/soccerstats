@@ -1,24 +1,25 @@
 import type { GameSummary } from "../lib/stats";
 import Gauge from "./Gauge";
-import { useShow } from "../lib/team";
+import { useShow, useTeamNames } from "../lib/team";
 
 function V({ v, machine, suffix = "" }: { v: number | string | null | undefined; machine?: boolean; suffix?: string }) {
   if (v == null) return <td className="v muted">—</td>;
   return <td className={`v ${machine ? "machine" : ""}`}>{v}{suffix}</td>;
 }
 
-export default function StatsPanel({ s, compact }: { s: GameSummary; compact?: boolean }) {
+export default function StatsPanel({ s, compact, opponent }: { s: GameSummary; compact?: boolean; opponent?: string | null }) {
   const show = useShow();
+  const names = useTeamNames(opponent);
   const posM = (src: string | null) => src === "machine";
   const chip = (src: string | null) => src == null ? null : src === "machine" ? <span className="badge machine">≈ machine</span> : <span className="badge plain">confirmed</span>;
   return (
     <div>
       {show("possession") ? <div className="gauges">
-        <Gauge value={s.us.possession} label="Possession · us" side="us" chip={chip(s.us.possessionSource)} />
-        <Gauge value={s.them.possession} label="Possession · them" side="them" chip={chip(s.them.possessionSource)} />
+        <Gauge value={s.us.possession} label={names.us} side="us" chip={chip(s.us.possessionSource)} />
+        <Gauge value={s.them.possession} label={names.them} side="them" chip={chip(s.them.possessionSource)} />
       </div> : null}
       <table className="stat-table">
-        <thead><tr><th>Us</th><th></th><th>Them</th></tr></thead>
+        <thead><tr><th>{names.us}</th><th></th><th>{names.them}</th></tr></thead>
         <tbody>
           <tr><V v={s.us.goals} /><td className="lbl">Goals</td><V v={s.them.goals} /></tr>
           <tr><V v={s.us.shots} /><td className="lbl">Shots</td><V v={s.them.shots} /></tr>

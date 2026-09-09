@@ -20,9 +20,10 @@ def torso_color(img, box):
     h, w = y2 - y1, x2 - x1
     if h < 14 or w < 5:
         return None
-    # Small (distant) players get a wider crop so shadowed shirts still yield enough pixels.
-    small = h < 40
-    ty1, ty2 = y1 + int(h * (0.15 if small else 0.18)), y1 + int(h * (0.55 if small else 0.50))
+    # Small (distant) players get a slightly wider crop so shadowed shirts still yield enough
+    # pixels, but never below mid-torso: shorts are often the other colour.
+    small = h < 40 and SMALL_WIDE
+    ty1, ty2 = y1 + int(h * (0.16 if small else 0.18)), y1 + int(h * (0.48 if small else 0.50))
     tx1, tx2 = x1 + int(w * (0.15 if small else 0.25)), x2 - int(w * (0.15 if small else 0.25))
     crop = img[max(0, ty1):ty2, max(0, tx1):tx2]
     if crop.size == 0:
@@ -30,9 +31,9 @@ def torso_color(img, box):
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).reshape(-1, 3)
     lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB).reshape(-1, 3).astype(np.float32)
     grass = is_field_pixel(hsv, field_colour(img))
-    dark = hsv[:, 2] < 28          # only true black; shaded shirts keep their hue
+    dark = hsv[:, 2] < DARK_V
     keep = ~grass & ~dark
-    if keep.sum() < 4:
+    if keep.sum() < MIN_KEEP:
         return None
     return np.median(lab[keep], axis=0)
 

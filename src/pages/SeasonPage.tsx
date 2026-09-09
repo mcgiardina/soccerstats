@@ -68,7 +68,7 @@ export default function SeasonPage() {
         </div>
       </div>
 
-      {show("trends") ? <TrendCharts data={trend} /> : null}
+      {show("trends") ? <TrendCharts data={trend} usName={team.shortName} /> : null}
 
       <div className="filters">
         <div className="search"><input className="pill" type="text" placeholder="Search notes & tag labels" value={q} onChange={(e) => setQ(e.target.value)} /></div>

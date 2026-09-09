@@ -16,7 +16,7 @@ import Modal from "../components/Modal";
 import { HOTKEYS, useHotkeys } from "../components/useHotkeys";
 import * as api from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { useShow, useTeam } from "../lib/team";
+import { useShow, useTeam, useTeamNames } from "../lib/team";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
@@ -48,6 +48,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const show = useShow();
 
   const [b, setB] = useState<GameBundle | null>(null);
+  const names = useTeamNames(b?.game.opponent);
   const [err, setErr] = useState<string | null>(null);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -87,7 +88,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
     const team = opposing ? "them" : "us";
     const tag = await api.addTag({ game_id: b.game.id, video_id: video.id, t_seconds: Math.round(t * 10) / 10, type, team, source: "human" });
     const isShotLike = type === "shot" || type === "goal" || type === "penalty";
-    showToast(`${TAG_LABELS[type]} · ${team} @ ${toMatchTime(video, t).label}`);
+    showToast(`${TAG_LABELS[type]} · ${names.of(team)} @ ${toMatchTime(video, t).label}`);
     await reload();
     if (isShotLike) setPlacing(tag);
     else if (SET_PIECE_TYPES.includes(type) || type === "note") setEditing({ tag, quick: true, isNew: true });
@@ -221,7 +222,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                   <summary>Tagging keys</summary>
                   <div className="keys" style={{ marginTop: ".4rem" }}>
                     {HOTKEYS.map((h) => <span key={h.key}><kbd>{h.key}</kbd> <span className="tiny">{TAG_LABELS[h.type]}</span></span>)}
-                    <span><kbd>⇧</kbd> <span className="tiny">+key = them</span></span>
+                    <span><kbd>⇧</kbd> <span className="tiny">+key = {names.them}</span></span>
                     <span><kbd>space</kbd> <span className="tiny">play/pause</span></span>
                     <span><kbd>←</kbd><kbd>→</kbd> <span className="tiny">±5s (⇧ ±30s)</span></span>
                   </div>
@@ -260,7 +261,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {panel === "tags" ? (
                 <>
                   {admin && b.tags.some((t) => t.source === "machine" && t.confirmed == null) ? <div className="notice">Machine proposals need review. ✓ accepts, ✗ rejects. Only confirmed ones show to parents.</div> : null}
-                  <TagList tags={show("tags") ? visibleTags : []} shots={b.shots} video={video} gameId={g.id} isAdmin={admin} currentTime={current} onSeek={seek}
+                  <TagList tags={show("tags") ? visibleTags : []} shots={b.shots} video={video} gameId={g.id} opponent={g.opponent} isAdmin={admin} currentTime={current} onSeek={seek}
                     onEdit={(t) => setEditing({ tag: t, quick: false, isNew: false })} onDelete={removeTag} onPlace={setPlacing} onReview={review} onToast={showToast} />
                   {admin && video ? <button className="btn sm" style={{ marginTop: ".5rem" }} onClick={() => setEditing({ tag: { t_seconds: Math.round(current), type: "note", team: "us" }, quick: false, isNew: true })}>+ Add tag at {toMatchTime(video, current).label}</button> : null}
                 </>
@@ -305,8 +306,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
             </div>
           </div>
-          <StatsPanel s={summary} />
-          {b.buckets.length && show("momentum") ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} /></div> : null}
+          <StatsPanel s={summary} opponent={g.opponent} />
+          {b.buckets.length && show("momentum") ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} names={names} /></div> : null}
         </div>
 
         <div className="card" hidden={!show("shotmap")}>
@@ -314,8 +315,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             <h2 style={{ margin: 0 }}>Shot map</h2>
             {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
           </div>
-          <PitchMap shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
-          <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. We attack →.</div>
+          <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
+          <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. {names.us} attack →, {names.them} attack ←.</div>
         </div>
 
         <div className="below-span">
@@ -324,8 +325,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         </div>
       </div>
 
-      {editing ? <TagEditor tag={editing.tag} quick={editing.quick} onSave={saveTag} onClose={() => setEditing(null)} /> : null}
-      {placing ? <ShotPlacer tag={placing} existing={shotFor(placing)} pitch={pitch} onSave={(s) => saveShot(placing, s)} onClose={() => setPlacing(null)} /> : null}
+      {editing ? <TagEditor tag={editing.tag} quick={editing.quick} opponent={g.opponent} onSave={saveTag} onClose={() => setEditing(null)} /> : null}
+      {placing ? <ShotPlacer tag={placing} existing={shotFor(placing)} pitch={pitch} opponent={g.opponent} onSave={(s) => saveShot(placing, s)} onClose={() => setPlacing(null)} /> : null}
       {editGame ? (
         <Modal onClose={() => setEditGame(false)} title="Edit game">
           <GameForm initial={g} opponents={[]} onSubmit={async (input) => { await api.updateGame(g.id, input); setEditGame(false); reload(); }} />

@@ -142,6 +142,7 @@ textarea { min-height: 84px; resize: vertical; }
 .badge.draft { background: #fff5dd; color: #8a5a00; }
 .badge.machine { background: #fff5dd; color: var(--machine); }
 .badge.us { background: #e6ebf4; color: var(--us); }
+.tag-row .lbl .badge { max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge.them { background: #fdece7; color: #b85a42; }
 .badge.plain::before { display: none; }
 

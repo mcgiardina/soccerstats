@@ -3,12 +3,14 @@ import type { Shot, Tag, Video } from "../lib/types";
 import { TAG_LABELS, SET_PIECE_TYPES } from "../lib/types";
 import { seekTime, toMatchTime } from "../lib/time";
 import { shareUrl, copyText } from "../lib/links";
+import { useTeamNames } from "../lib/team";
 
 interface Props {
   tags: Tag[];
   shots: Shot[];
   video: Video | null;
   gameId: string;
+  opponent?: string | null;
   isAdmin: boolean;
   currentTime: number;
   onSeek: (t: number) => void;
@@ -28,6 +30,7 @@ const FILTERS: { key: string; label: string; types: string[] | null }[] = [
 ];
 
 export default function TagList(p: Props) {
+  const names = useTeamNames(p.opponent);
   const [filter, setFilter] = useState("all");
   const [side, setSide] = useState<"all" | "us" | "them">("all");
   const f = FILTERS.find((x) => x.key === filter)!;
@@ -53,7 +56,7 @@ export default function TagList(p: Props) {
           ))}
         </div>
         <select value={side} onChange={(e) => setSide(e.target.value as "all" | "us" | "them")} className="pill">
-          <option value="all">both</option><option value="us">us</option><option value="them">them</option>
+          <option value="all">both teams</option><option value="us">{names.us}</option><option value="them">{names.them}</option>
         </select>
       </div>
       {list.length === 0 ? <p className="muted small">No tags yet.</p> : null}
@@ -66,7 +69,7 @@ export default function TagList(p: Props) {
           <div key={t.id} className={`tag-row ${unreviewed ? "machine" : ""} ${activeId === t.id ? "active" : ""}`}>
             <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds))} title="Jump">{mt.label}</span>
             <span className="lbl">
-              <span className={`badge ${t.team ?? ""}`}>{t.team ?? "—"}</span>
+              <span className={`badge ${t.team ?? ""}`}>{names.of(t.team)}</span>
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
               {t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
               {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}

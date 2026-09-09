@@ -11,6 +11,8 @@ interface Props {
   onShotClick?: (shot: Shot) => void;
   highlightId?: string | null;
   height?: number;
+  attackLabel?: string;
+  names?: { us: string; them: string };
 }
 
 const L = 105, W = 68; // drawing units (shape only; real dims come from config/game)
@@ -19,7 +21,7 @@ export function toDisplay(team: Team | null, x: number, y: number): [number, num
   return team === "them" ? [(1 - x) * L, (1 - y) * W] : [x * L, y * W];
 }
 
-export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId }: Props) {
+export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId, attackLabel, names }: Props) {
   const [hover, setHover] = useState<[number, number] | null>(null);
 
   function coords(e: React.MouseEvent<SVGSVGElement>): [number, number] {
@@ -67,7 +69,7 @@ export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, 
       {onPick ? (
         <>
           <text x={pickTeam === "us" ? L - 1 : 1} y={W - 1.5} fontSize={3.2} fill="#fff" textAnchor={pickTeam === "us" ? "end" : "start"} opacity={0.9}>
-            {pickTeam === "us" ? "we attack →" : "← they attack"}
+            {attackLabel ?? (pickTeam === "us" ? "we attack →" : "← they attack")}
           </text>
           {hover ? <circle cx={hover[0]} cy={hover[1]} r={1.6} fill="none" stroke="#fff" strokeWidth={0.4} /> : null}
         </>
@@ -83,7 +85,7 @@ export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, 
               opacity={highlightId && highlightId !== s.id ? 0.45 : 0.9}
               onClick={(e) => { if (onShotClick) { e.stopPropagation(); onShotClick(s); } }}
             >
-              <title>{`${s.team === "us" ? "Us" : "Them"} · ${s.is_goal ? "GOAL · " : ""}xG ${s.xg ?? "?"}${s.location_source === "machine" ? " (machine)" : ""}`}</title>
+              <title>{`${s.team === "us" ? (names?.us ?? "Us") : (names?.them ?? "Them")} · ${s.is_goal ? "GOAL · " : ""}xG ${s.xg ?? "?"}${s.location_source === "machine" ? " (machine)" : ""}`}</title>
             </circle>
           </g>
         );
