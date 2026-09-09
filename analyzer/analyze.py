@@ -37,6 +37,13 @@ def run_queue(poll_seconds: int, backend: str) -> int:
             print(f"--- run for game {gid} at {time.strftime('%H:%M:%S')}")
             rc = subprocess.call(args, cwd=os.path.dirname(os.path.abspath(__file__)))
             print(f"--- finished with code {rc}")
+            if rc != 0:
+                # Don't spin on a broken run: mark it failed so the queue moves on. The app shows the status.
+                try:
+                    db.fail_queued(q[0]["id"], f"worker exit code {rc}; see the worker log")
+                except Exception as e:  # noqa: BLE001
+                    print("could not mark run failed:", str(e)[:120])
+                time.sleep(15)
             continue
         time.sleep(poll_seconds)
 

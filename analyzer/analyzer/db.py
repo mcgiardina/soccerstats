@@ -39,9 +39,13 @@ def claim_run(game_id, video_id, model_version, params):
     # keep whatever the app put in params (e.g. us_cluster) alongside ours
     if q and isinstance(q[0].get("params"), dict):
         patch["params"] = {**q[0]["params"], **params}
+    # supabase-py returns the affected rows from update/insert directly (no .select().single() chain,
+    # which older releases don't support).
     if q:
-        return client().table("stat_runs").update(patch).eq("id", q[0]["id"]).select().single().execute().data
-    return client().table("stat_runs").insert({"game_id": game_id, **patch}).select().single().execute().data
+        rows = client().table("stat_runs").update(patch).eq("id", q[0]["id"]).execute().data
+    else:
+        rows = client().table("stat_runs").insert({"game_id": game_id, **patch}).execute().data
+    return rows[0]
 
 
 def finish_run(run_id, status, error=None):
@@ -98,7 +102,7 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
             continue
         for r in machine_tag_rows(s, label):
             rows.append({"game_id": game_id, "video_id": video_id, "source": "machine", **r})
-    inserted = c.table("tags").insert(rows).select().execute().data if rows else []
+    inserted = c.table("tags").insert(rows).execute().data if rows else []
     # Machine locations go on the shots table as proposals, marked 'machine'.
     from analyzer.xg import compute_xg, MODEL_VERSION
     L = float(pitch[0] or 105); W = float(pitch[1] or 68)
@@ -117,3 +121,7 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
     if snapshots:
         for i in range(0, len(snapshots), 200):
             c.table("shape_snapshots").insert([{**s, "game_id": game_id, "run_id": run_id} for s in snapshots[i:i + 200]]).execute()
+
+
+def fail_queued(run_id, error):
+    client().table("stat_runs").update({"status": "failed", "finished_at": now(), "error": str(error)[:500]}).eq("id", run_id).execute()
