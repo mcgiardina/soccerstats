@@ -9,7 +9,8 @@ import traceback
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()                                                            # analyzer/.env (may be Dropbox-synced)
+load_dotenv(os.path.expanduser("~/.config/matchfilm/.env"), override=True)  # per-machine secrets, never synced
 
 from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp  # noqa: E402
 
