@@ -17,6 +17,7 @@ export const GATEABLE: { key: string; label: string; group: string }[] = [
   { key: "possession", label: "Possession gauges", group: "Stats" },
   { key: "xg", label: "xG and xG per shot", group: "Stats" },
   { key: "turnovers", label: "Turnovers", group: "Stats" },
+  { key: "passes", label: "Passes and pass map", group: "Stats" },
   { key: "saves", label: "Saves", group: "Stats" },
   { key: "accuracy", label: "Shot accuracy", group: "Stats" },
   { key: "setpieces", label: "Corners, free kicks, penalties", group: "Stats" },
@@ -79,7 +80,7 @@ export function TeamProvider({ children, isAdmin }: { children: ReactNode; isAdm
   const value = useMemo<TeamState>(() => ({
     team,
     name: team.team_name || CONFIG.teamName,
-    shortName: team.short_name || team.team_name || CONFIG.teamName,
+    shortName: team.short_name || autoShort(team.team_name || CONFIG.teamName),
     logo: team.logo_data_url || CONFIG.logoUrl,
     pitch: { lengthM: team.pitch_length_m ?? CONFIG.pitch.lengthM, widthM: team.pitch_width_m ?? CONFIG.pitch.widthM },
     hidden: new Set(team.hidden),
@@ -88,6 +89,17 @@ export function TeamProvider({ children, isAdmin }: { children: ReactNode; isAdm
   }), [team, isAdmin, isCoach, coachToken, reload, setCoachToken]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** "Athletic Soccer Club Long Beach BU13" -> "ASCLB BU13" when no short name is set. */
+export function autoShort(name: string): string {
+  if (name.length <= 16) return name;
+  const words = name.split(/\s+/);
+  const last = words[words.length - 1];
+  const age = /\d/.test(last) ? last : null;
+  const core = age ? words.slice(0, -1) : words;
+  const initials = core.map((w) => w[0]?.toUpperCase() ?? "").join("");
+  return age ? `${initials} ${age}` : initials;
 }
 
 export function useTeam() { return useContext(Ctx); }

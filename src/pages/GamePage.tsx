@@ -25,6 +25,22 @@ import { copyText, shareUrl } from "../lib/links";
 import { fetchOEmbed, parseYouTubeId, watchUrl } from "../lib/youtube";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
 
+function PassThirds({ passes, names }: { passes: import("../lib/types").PassEvent[]; names: { us: string; them: string } }) {
+  const located = passes.filter((p) => p.third);
+  if (!located.length) return null;
+  const count = (team: "us" | "them", third: string) => located.filter((p) => p.team === team && p.third === third).length;
+  return (
+    <table className="stat-table" style={{ marginTop: ".5rem" }}>
+      <thead><tr><th>{names.us}</th><th></th><th>{names.them}</th></tr></thead>
+      <tbody>
+        {(["left", "mid", "right"] as const).map((t) => (
+          <tr key={t}><td className="v machine">{count("us", t)}</td><td className="lbl">{t === "mid" ? "Middle third" : `${t[0].toUpperCase()}${t.slice(1)} third`}</td><td className="v machine">{count("them", t)}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function SkipIcon({ dir, n }: { dir: "back" | "fwd"; n: number }) {
   const flip = dir === "back" ? "scale(-1,1) translate(-24,0)" : undefined;
   return (
@@ -58,6 +74,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const [editGame, setEditGame] = useState(false);
   const [period, setPeriod] = useState<Period>("full");
   const [panel, setPanel] = useState<"tags" | "periods" | "chapters" | "analysis" | "shape">("tags");
+  const [mapMode, setMapMode] = useState<"shots" | "passes">("shots");
   const [videoUrl, setVideoUrl] = useState("");
   const [videoKind, setVideoKind] = useState<NonNullable<Video["kind"]>>("upload");
   const player = useRef<PlayerHandle>(null);
@@ -310,13 +327,31 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           {b.buckets.length && show("momentum") ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} names={names} /></div> : null}
         </div>
 
-        <div className="card" hidden={!show("shotmap")}>
+        <div className="card" hidden={!show("shotmap") && !(show("passes") && b.passes.length)}>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0 }}>Shot map</h2>
-            {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
+            <h2 style={{ margin: 0 }}>{mapMode === "shots" ? "Shot map" : "Pass map"}</h2>
+            <div className="row" style={{ gap: ".4rem" }}>
+              {b.passes.length && show("passes") && show("shotmap") ? (
+                <div className="seg">
+                  <button className={mapMode === "shots" ? "on" : ""} onClick={() => setMapMode("shots")}>Shots</button>
+                  <button className={mapMode === "passes" ? "on" : ""} onClick={() => setMapMode("passes")}>Passes</button>
+                </div>
+              ) : null}
+              {admin && b.shots.length && mapMode === "shots" ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
+            </div>
           </div>
-          <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
-          <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. {names.us} attack →, {names.them} attack ←.</div>
+          {mapMode === "shots" || !show("passes") ? (
+            <>
+              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
+              <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. {names.us} attack →, {names.them} attack ←.</div>
+            </>
+          ) : (
+            <>
+              <PitchMap names={names} shots={[]} passes={b.passes.filter((p) => p.from_x != null)} />
+              <PassThirds passes={b.passes} names={names} />
+              <div className="tiny muted">Machine estimate. Arrows = passes the analyzer could place on the pitch ({b.passes.filter((p) => p.from_x != null).length} of {b.passes.length}); solid = completed, dashed = not. Thirds are left / middle / right of the video's pitch, not defensive / attacking.</div>
+            </>
+          )}
         </div>
 
         <div className="below-span">

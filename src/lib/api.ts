@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import type {
-  Game, GameBundle, Shot, StatBucket, StatRun, Tag, TeamStats, Video, ShapeSnapshot,
+  Game, GameBundle, Shot, StatBucket, StatRun, Tag, TeamStats, Video, ShapeSnapshot, PassEvent,
 } from "./types";
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -22,7 +22,7 @@ export async function listGames(): Promise<GameRow[]> {
 }
 
 export async function getGameBundle(id: string): Promise<GameBundle> {
-  const [g, v, t, s, ts, b, sh, r] = await Promise.all([
+  const [g, v, t, s, ts, b, sh, r, pe] = await Promise.all([
     supabase.from("games").select("*").eq("id", id).single(),
     supabase.from("videos").select("*").eq("game_id", id).order("created_at"),
     supabase.from("tags").select("*").eq("game_id", id).order("t_seconds"),
@@ -31,6 +31,7 @@ export async function getGameBundle(id: string): Promise<GameBundle> {
     supabase.from("stat_buckets").select("*").eq("game_id", id).order("bucket_start_s"),
     supabase.from("shape_snapshots").select("*").eq("game_id", id),
     supabase.from("stat_runs").select("*").eq("game_id", id).order("created_at", { ascending: false }),
+    supabase.from("pass_events").select("*").eq("game_id", id).order("t_seconds"),
   ]);
   return {
     game: unwrap(g) as Game,
@@ -41,6 +42,7 @@ export async function getGameBundle(id: string): Promise<GameBundle> {
     buckets: unwrap(b) as StatBucket[],
     shapes: unwrap(sh) as ShapeSnapshot[],
     runs: unwrap(r) as StatRun[],
+    passes: unwrap(pe) as PassEvent[],
   };
 }
 

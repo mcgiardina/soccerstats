@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Shot, Team } from "../lib/types";
+import type { PassEvent, Shot, Team } from "../lib/types";
 
 // Draws a full pitch horizontally. "us" attacks the right goal; "them" the left.
 // Shot coordinates are stored attack-normalized (x=1 is the attacking goal line),
@@ -13,6 +13,8 @@ interface Props {
   height?: number;
   attackLabel?: string;
   names?: { us: string; them: string };
+  /** when given, draw located passes instead of shots */
+  passes?: PassEvent[];
 }
 
 const L = 105, W = 68; // drawing units (shape only; real dims come from config/game)
@@ -21,7 +23,7 @@ export function toDisplay(team: Team | null, x: number, y: number): [number, num
   return team === "them" ? [(1 - x) * L, (1 - y) * W] : [x * L, y * W];
 }
 
-export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId, attackLabel, names }: Props) {
+export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId, attackLabel, names, passes }: Props) {
   const [hover, setHover] = useState<[number, number] | null>(null);
 
   function coords(e: React.MouseEvent<SVGSVGElement>): [number, number] {
@@ -74,7 +76,27 @@ export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, 
           {hover ? <circle cx={hover[0]} cy={hover[1]} r={1.6} fill="none" stroke="#fff" strokeWidth={0.4} /> : null}
         </>
       ) : null}
-      {shots.filter((s) => s.pitch_x != null && s.pitch_y != null).map((s) => {
+      {passes ? (
+        <>
+          <defs>
+            <marker id="arr-us" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L6 3L0 6z" fill="var(--us)" /></marker>
+            <marker id="arr-them" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L6 3L0 6z" fill="var(--them)" /></marker>
+          </defs>
+          {passes.filter((p) => p.from_x != null && p.from_y != null).map((p) => {
+            const x1 = p.from_x! * L, y1 = p.from_y! * W;
+            const has = p.to_x != null && p.to_y != null;
+            const col = p.team === "them" ? "var(--them)" : "var(--us)";
+            const op = p.outcome === "completed" ? 0.85 : 0.45;
+            return (
+              <g key={p.id}>
+                {has ? <line x1={x1} y1={y1} x2={p.to_x! * L} y2={p.to_y! * W} stroke={col} strokeWidth={0.7} opacity={op} markerEnd={`url(#arr-${p.team === "them" ? "them" : "us"})`} strokeDasharray={p.outcome === "completed" ? undefined : "1.2 1"} /> : null}
+                <circle cx={x1} cy={y1} r={1.1} fill={col} opacity={op}><title>{`${p.team === "us" ? (names?.us ?? "Us") : (names?.them ?? "Them")} · ${p.outcome ?? "?"}`}</title></circle>
+              </g>
+            );
+          })}
+        </>
+      ) : null}
+      {passes ? null : shots.filter((s) => s.pitch_x != null && s.pitch_y != null).map((s) => {
         const [cx, cy] = toDisplay(s.team, s.pitch_x!, s.pitch_y!);
         const r = 1.4 + (s.xg ?? 0.05) * 3.5;
         return (

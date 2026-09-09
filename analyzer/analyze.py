@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()                                                            # analyzer/.env (may be Dropbox-synced)
 load_dotenv(os.path.expanduser("~/.config/matchfilm/.env"), override=True)  # per-machine secrets, never synced
 
-from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp  # noqa: E402
+from analyzer import db, fetch, video, detect, teams, possession, shots, homography, shape, dewarp, passes  # noqa: E402
 
 MODEL_VERSION = "mf-analyzer-0.1"
 
@@ -146,6 +146,10 @@ def main() -> int:
             del fr
         elif args.from_cache:
             H = homography.load_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"))
+        pass_events, pass_summary, ball_cov = passes.detect(dets, poss["sequence"], fps=args.fps, H=H or None)
+        for ts_row in poss["team_stats"]:
+            if ts_row["period"] == "full":
+                ts_row.update({"passes": pass_summary[ts_row["team"]]["passes"], "passes_completed": pass_summary[ts_row["team"]]["passes_completed"], "ball_coverage": ball_cov})
         shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
         more, kick_cands = shots.classify_by_keeper(kick_cands, dets, fps=args.fps)
         shot_cands = sorted(shot_cands + more, key=lambda c: c["t"])
@@ -156,6 +160,7 @@ def main() -> int:
             "game_id": args.game_id, "video_id": main_video["id"], "model_version": MODEL_VERSION, "params": params,
             "frames": len(dets), "team_stats": poss["team_stats"], "buckets": poss["buckets"],
             "shot_candidates": shot_cands, "kick_candidates": kick_cands, "shot_locations": located,
+            "pass_events": pass_events, "ball_coverage": ball_cov,
             "homography_frames": len(H), "shape_snapshots": len(snaps),
         }
         out_path = os.path.join(fetch.CACHE, f"{args.game_id}_results.json")
@@ -170,7 +175,7 @@ def main() -> int:
         db.write_results(
             game_id=args.game_id, run_id=run["id"], video_id=main_video["id"],
             team_stats=poss["team_stats"], buckets=poss["buckets"],
-            shot_tags=shot_cands, kick_tags=kick_cands, shot_locations=located, snapshots=snaps,
+            shot_tags=shot_cands, kick_tags=kick_cands, shot_locations=located, snapshots=snaps, pass_events=pass_events,
             pitch=(game.get("pitch_length_m"), game.get("pitch_width_m")),
         )
         db.finish_run(run["id"], "done")

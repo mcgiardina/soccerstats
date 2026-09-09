@@ -102,6 +102,9 @@ export interface TeamStats {
   shots_on_target: number | null;
   turnovers: number | null;
   xg_total: number | null;
+  passes: number | null;
+  passes_completed: number | null;
+  ball_coverage: number | null;
   source: "machine" | "human_adjusted";
   created_at: string;
 }
@@ -141,6 +144,20 @@ export const VIDEO_KINDS: { value: NonNullable<Video["kind"]>; label: string; hi
   { value: "wide_fixed", label: "Wide-angle source", hint: "Raw fisheye / fixed full-pitch camera, for analysis only; not shown to viewers" },
 ];
 
+export interface PassEvent {
+  id: string;
+  game_id: string;
+  run_id: string | null;
+  t_seconds: number;
+  team: Team | null;
+  completed: boolean;
+  outcome: "completed" | "incomplete" | "unknown" | null;
+  from_x: number | null; from_y: number | null;
+  to_x: number | null; to_y: number | null;
+  third: "left" | "mid" | "right" | null;
+  confidence: number | null;
+}
+
 export interface GameBundle {
   game: Game;
   videos: Video[];
@@ -150,4 +167,5 @@ export interface GameBundle {
   buckets: StatBucket[];
   shapes: ShapeSnapshot[];
   runs: StatRun[];
+  passes: PassEvent[];
 }

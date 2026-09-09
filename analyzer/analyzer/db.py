@@ -80,7 +80,13 @@ def machine_tag_rows(s, label):
     return rows
 
 
-def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch, kick_tags=()):
+def pass_rows(game_id, run_id, events):
+    return [{"game_id": game_id, "run_id": run_id, "t_seconds": e["t"], "team": e["team"], "completed": bool(e["completed"]),
+             "outcome": e.get("outcome"), "from_x": e.get("from_x"), "from_y": e.get("from_y"), "to_x": e.get("to_x"), "to_y": e.get("to_y"),
+             "third": e.get("third"), "confidence": e.get("confidence")} for e in events]
+
+
+def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch, kick_tags=(), pass_events=()):
     c = client()
     # Replace prior machine stats for this game; human_adjusted rows are untouched.
     c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
@@ -116,6 +122,11 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
             "location_confidence": loc["confidence"], "is_goal": False,
             "xg": compute_xg(loc["x"], loc["y"], L, W), "xg_model_version": MODEL_VERSION,
         }, on_conflict="tag_id").execute()
+
+    c.table("pass_events").delete().eq("game_id", game_id).execute()
+    rows_p = pass_rows(game_id, run_id, pass_events)
+    for i in range(0, len(rows_p), 200):
+        c.table("pass_events").insert(rows_p[i:i + 200]).execute()
 
     c.table("shape_snapshots").delete().eq("game_id", game_id).execute()
     if snapshots:

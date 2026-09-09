@@ -40,6 +40,11 @@ export interface SideSummary {
   /** average xG per located shot */
   xgPerShot: number | null;
   penalties: number;
+  /** machine pass estimates (lower bounds; see ballCoverage) */
+  passes: number | null;
+  passesCompleted: number | null;
+  passAccuracy: number | null;
+  ballCoverage: number | null;
 }
 
 export interface GameSummary {
@@ -105,6 +110,10 @@ export function summarizeGame(
       accuracy: shotsOnTarget != null && shotTags.length ? shotsOnTarget / shotTags.length : null,
       xgPerShot: xg != null && located.length ? Math.round((xg / located.length) * 100) / 100 : null,
       penalties: mine.filter((t) => t.type === "penalty").length,
+      passes: st?.passes ?? null,
+      passesCompleted: st?.passes_completed ?? null,
+      passAccuracy: st?.passes != null && st.passes > 0 && st.passes_completed != null ? st.passes_completed / st.passes : null,
+      ballCoverage: st?.ball_coverage ?? null,
     };
   }
 
