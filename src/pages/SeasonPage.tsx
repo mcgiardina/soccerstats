@@ -7,6 +7,7 @@ import { fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
 import { summarizeGame } from "../lib/stats";
 import TrendCharts, { buildTrend } from "../components/TrendCharts";
+import DateRangePicker from "../components/DateRangePicker";
 import { CONFIG } from "../config";
 
 export default function SeasonPage() {
@@ -75,8 +76,7 @@ export default function SeasonPage() {
             <button key={v} className={comp === v ? "on" : ""} onClick={() => setComp(v)}>{l}</button>
           ))}
         </div>
-        <input className="pill" type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" style={{ width: "auto" }} />
-        <input className="pill" type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" style={{ width: "auto" }} />
+        <DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} />
       </div>
 
       {games.length === 0 ? <div className="card muted">No games{isAdmin ? " yet. Add one to get started." : " published yet."}</div> : null}

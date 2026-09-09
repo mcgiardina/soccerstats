@@ -14,15 +14,17 @@ export default function Layout({ children }: { children: ReactNode }) {
           <small>{CONFIG.teamName}</small>
         </Link>
         <span className="spacer" />
-        {isAdmin ? (
-          <>
-            <span className="pill">admin</span>
-            <Link to="/games/new" className="navlink primary">+ Game</Link>
-            <a href="#" className="navlink quiet" onClick={(e) => { e.preventDefault(); logout(); }}>Sign out</a>
-          </>
-        ) : (
-          <Link to="/login" className="navlink quiet">Admin</Link>
-        )}
+        <div className="nav-actions">
+          {isAdmin ? (
+            <>
+              <Link to="/games/new" className="btn sm primary">+ Game</Link>
+              <Link to="/settings" className="btn sm">Settings</Link>
+              <button className="btn sm" onClick={() => logout()} title="Signed in as admin">Sign out</button>
+            </>
+          ) : (
+            <Link to="/login" className="btn sm">Admin</Link>
+          )}
+        </div>
       </nav>
       {children}
     </>

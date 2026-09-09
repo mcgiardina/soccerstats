@@ -50,6 +50,31 @@ sample games in Sept 2026:
 Never runs automatically. The web app's "Queue analysis run" button only inserts a
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).
 
+## Running it on a spare Mac (worker mode)
+A Mac mini in the garage can do all of this so your laptop never has to. It only ever
+processes runs a human queued from the app's **Analysis** tab, so nothing starts on its own.
+
+On the mini, once:
+```bash
+git clone https://github.com/mcgiardina/soccerstats.git ~/soccerstats
+cd ~/soccerstats/analyzer
+python3.13 -m venv .venv && .venv/bin/pip install -r requirements.txt
+./get_weights.sh
+cp .env.example .env      # then paste SUPABASE_URL and SUPABASE_SERVICE_KEY (service key = writes)
+.venv/bin/python analyze.py --watch      # try it in a terminal first
+```
+Then make it a login agent so it survives reboots: edit the two `USERNAME` paths in
+`launchd/com.matchfilm.analyzer.plist`, copy it to `~/Library/LaunchAgents/`, and run
+`launchctl load ~/Library/LaunchAgents/com.matchfilm.analyzer.plist`. Logs go to
+`~/Library/Logs/matchfilm-analyzer.log`. Keep the mini awake: System Settings → Energy →
+prevent sleeping when the display is off, or `caffeinate -s` in the plist. To update the
+worker, `git pull` and `launchctl kickstart -k gui/$(id -u)/com.matchfilm.analyzer`.
+
+Weekly flow: upload the game, add it in the app, press **Queue analysis run**. The mini
+picks it up within a minute, and the machine tags appear in the app when it finishes.
+The first run of a new season asks which kit is "us": run `analyze.py --game-id <id>`
+once by hand on the mini (or set `params.us_cluster` on the queued run) and it remembers.
+
 ## Better models (recommended, no account needed)
 Roboflow publishes pre-trained football weights in the MIT-licensed `roboflow/sports` repo:
 a player/goalkeeper/referee/ball detector, a ball-only detector, and the 32-landmark pitch

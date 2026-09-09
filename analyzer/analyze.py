@@ -16,9 +16,35 @@ from analyzer import db, fetch, video, detect, teams, possession, shots, homogra
 MODEL_VERSION = "mf-analyzer-0.1"
 
 
+def run_queue(poll_seconds: int, backend: str) -> int:
+    """Worker mode for a spare Mac: process runs the admin has queued from the app, oldest first.
+    Nothing starts unless a human pressed "Queue analysis run"; this just executes that queue.
+    Needs SUPABASE_SERVICE_KEY. Ctrl-C to stop."""
+    import subprocess
+    print(f"watching for queued runs every {poll_seconds}s (backend={backend})")
+    while True:
+        try:
+            q = db.client().table("stat_runs").select("id,game_id,params").eq("status", "queued").order("created_at").limit(1).execute().data
+        except Exception as e:  # noqa: BLE001
+            print("queue check failed:", str(e)[:120]); q = []
+        if q:
+            gid = q[0]["game_id"]
+            us = (q[0].get("params") or {}).get("us_cluster")
+            args = [sys.executable, "-u", os.path.abspath(__file__), "--game-id", gid, "--backend", backend]
+            if us in ("A", "B"):
+                args += ["--us-cluster", us]
+            print(f"--- run for game {gid} at {time.strftime('%H:%M:%S')}")
+            rc = subprocess.call(args, cwd=os.path.dirname(os.path.abspath(__file__)))
+            print(f"--- finished with code {rc}")
+            continue
+        time.sleep(poll_seconds)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--game-id", required=True)
+    ap.add_argument("--game-id")
+    ap.add_argument("--watch", action="store_true", help="Worker mode: keep processing runs queued from the app")
+    ap.add_argument("--poll", type=int, default=60, help="Seconds between queue checks in --watch mode")
     ap.add_argument("--backend", choices=["local", "cloud"], default="local")
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--confirm-team", action="store_true", help="Re-ask which colour cluster is us")
@@ -31,6 +57,10 @@ def main() -> int:
     ap.add_argument("--refit-homography", action="store_true", help="With --from-cache: re-run the pitch model (re-decodes frames at 1 fps)")
     ap.add_argument("--camera", default="ballercam", help="Calibration name under calib/ used to de-warp a wide_fixed source")
     args = ap.parse_args()
+    if args.watch:
+        return run_queue(args.poll, args.backend)
+    if not args.game_id:
+        ap.error("--game-id is required unless --watch")
 
     game = db.get_game(args.game_id)
     vids = db.get_videos(args.game_id)

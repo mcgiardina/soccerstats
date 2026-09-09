@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.matchfilm.analyzer</string>
+  <!-- Edit the two paths below to where the repo lives on the Mac mini. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/USERNAME/soccerstats/analyzer/.venv/bin/python</string>
+    <string>-u</string>
+    <string>/Users/USERNAME/soccerstats/analyzer/analyze.py</string>
+    <string>--watch</string>
+    <string>--poll</string><string>60</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/USERNAME/soccerstats/analyzer</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/USERNAME/Library/Logs/matchfilm-analyzer.log</string>
+  <key>StandardErrorPath</key><string>/Users/USERNAME/Library/Logs/matchfilm-analyzer.log</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string></dict>
+</dict>
+</plist>

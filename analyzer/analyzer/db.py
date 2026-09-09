@@ -36,6 +36,9 @@ def claim_run(game_id, video_id, model_version, params):
     """Take the oldest queued run for this game, or create one. Never auto-triggered."""
     q = client().table("stat_runs").select("*").eq("game_id", game_id).eq("status", "queued").order("created_at").limit(1).execute().data
     patch = {"status": "running", "started_at": now(), "model_version": model_version, "params": params, "video_id": video_id}
+    # keep whatever the app put in params (e.g. us_cluster) alongside ours
+    if q and isinstance(q[0].get("params"), dict):
+        patch["params"] = {**q[0]["params"], **params}
     if q:
         return client().table("stat_runs").update(patch).eq("id", q[0]["id"]).select().single().execute().data
     return client().table("stat_runs").insert({"game_id": game_id, **patch}).select().single().execute().data
