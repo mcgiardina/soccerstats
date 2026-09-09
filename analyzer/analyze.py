@@ -121,6 +121,11 @@ def main() -> int:
             if args.limit_seconds is None:
                 detect.save_cache(cache_path, dets, args.fps)
 
+        if assign is not None and getattr(teams.assign, "us_cluster", None) is not None:
+            choice = {"us_cluster": "AB"[teams.assign.us_cluster], "team_pick": getattr(teams.assign, "method", None)}
+            params.update(choice)
+            if not args.dry_run:
+                db.update_run_params(run["id"], choice)
         offsets = video.period_offsets(main_video)
         poss = possession.compute(dets, assign, offsets, fps=args.fps)
         cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])

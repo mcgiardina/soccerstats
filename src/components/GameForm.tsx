@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Game } from "../lib/types";
 import { CONFIG } from "../config";
+import { useTeam } from "../lib/team";
 
 export type GameInput = Omit<Game, "id" | "created_at" | "published">;
 
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export default function GameForm({ initial, opponents, onSubmit, submitLabel = "Save", onOpponentChange }: Props) {
+  const team = useTeam();
+  const teamColor = team.primary_color || CONFIG.colors.primary;
   const [f, setF] = useState<GameInput>({
     played_on: initial?.played_on ?? new Date().toISOString().slice(0, 10),
     opponent: initial?.opponent ?? "",
@@ -24,6 +27,7 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
     pitch_length_m: initial?.pitch_length_m ?? null,
     pitch_width_m: initial?.pitch_width_m ?? null,
     notes: initial?.notes ?? "",
+    kit_color: initial?.kit_color ?? null,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -36,7 +40,7 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
     e.preventDefault();
     if (!f.opponent.trim()) { setErr("Opponent is required."); return; }
     setBusy(true); setErr(null);
-    try { await onSubmit({ ...f, opponent: f.opponent.trim(), venue: f.venue?.trim() || null, notes: f.notes?.trim() || null }); }
+    try { await onSubmit({ ...f, opponent: f.opponent.trim(), venue: f.venue?.trim() || null, notes: f.notes?.trim() || null, kit_color: f.kit_color?.trim() || null }); }
     catch (ex) { setErr((ex as Error).message); }
     finally { setBusy(false); }
   }
@@ -58,6 +62,13 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
         </div>
         <label className="field"><span>Pitch length (m) · default {CONFIG.pitch.lengthM}</span><input type="number" step="0.5" value={f.pitch_length_m ?? ""} onChange={(e) => set("pitch_length_m", num(e.target.value))} placeholder={String(CONFIG.pitch.lengthM)} /></label>
         <label className="field"><span>Pitch width (m) · default {CONFIG.pitch.widthM}</span><input type="number" step="0.5" value={f.pitch_width_m ?? ""} onChange={(e) => set("pitch_width_m", num(e.target.value))} placeholder={String(CONFIG.pitch.widthM)} /></label>
+        <label className="field"><span>Our kit colour this game · default team colour</span>
+          <div className="row">
+            <input type="color" value={f.kit_color || teamColor} onChange={(e) => set("kit_color", e.target.value)} style={{ width: 48, height: 36, padding: 2, borderRadius: 10 }} />
+            <input type="text" value={f.kit_color ?? ""} onChange={(e) => set("kit_color", e.target.value)} placeholder={teamColor} style={{ flex: 1 }} />
+            {f.kit_color ? <button type="button" className="btn sm" onClick={() => set("kit_color", null)}>Use team colour</button> : null}
+          </div>
+          <span className="small muted">The analyzer uses it to tell which side is us. Pick the shirt colour worn in this video.</span></label>
       </div>
       <label className="field"><span>Notes</span><textarea value={f.notes ?? ""} onChange={(e) => set("notes", e.target.value)} placeholder="Coach notes, conditions, anything searchable later" /></label>
       {err ? <p className="err small">{err}</p> : null}

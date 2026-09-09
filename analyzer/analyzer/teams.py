@@ -165,14 +165,14 @@ def _same_kit(ci, cj):
 
 
 def assign(dets, game_id, force_confirm=False, us_cluster=None):
-    samples, refs = [], []
+    samples, refs, raw_bgr = [], [], []
     for fi, d in enumerate(dets[::3]):
         for p in d.players:
             if (p[3] - p[1]) < 28 or not on_grass(d.img, p):   # big enough for a clean shirt crop, and on the pitch
                 continue
             c = torso_color(d.img, p)
             if c is not None:
-                samples.append(_feat(c)); refs.append((fi * 3, p[4]))
+                samples.append(_feat(c)); refs.append((fi * 3, p[4])); raw_bgr.append(c)
     if len(samples) < 200:
         print("too few player samples for team assignment", file=sys.stderr)
         return None
@@ -210,11 +210,24 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     cluster_centers = C
 
     _write_preview(dets, refs, labels)
+    assign.method = "flag" if us_cluster is not None else None
     if us_cluster is None and not force_confirm:
         us_cluster = db.get_team_choice(game_id)
+        assign.method = "remembered" if us_cluster is not None else None
+    if us_cluster is None:
+        # unattended (the Mac mini worker): match the two kits to the colour set on the game
+        kit = db.get_kit_color(game_id)
+        raw = np.array(raw_bgr, dtype=float)
+        kits = [np.median(raw[labels == k], axis=0) for k in (0, 1)]
+        pick = _pick_by_colour(kits, kit) if kit else None
+        if pick is not None:
+            us_cluster = pick
+            assign.method = f"kit colour {kit}"
+            print(f"us = cluster {'AB'[pick]} (closest to kit colour {kit})")
     if us_cluster is None:
         us_cluster = _confirm()
-    # persist answer in this run's params happens through write_results caller; keep simple: stash on module
+        assign.method = assign.method or ("confirmed" if sys.stdin.isatty() else "assumed A")
+    # persisted into this run's params by the caller (get_team_choice reads it back next time)
     assign.us_cluster = us_cluster
 
     team_of_cluster = {int(top[0]): 0, int(top[1]): 1}
@@ -262,6 +275,43 @@ def _write_preview(dets, refs, labels):
     os.makedirs(os.path.dirname(PREVIEW), exist_ok=True)
     cv2.imwrite(PREVIEW, img)
     print(f"team preview written to {PREVIEW} (A = yellow, B = magenta)")
+
+
+def _hex_bgr(h):
+    h = h.strip().lstrip("#")
+    if len(h) == 3:
+        h = "".join(ch * 2 for ch in h)
+    if len(h) != 6:
+        return None
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return np.array([b, g, r], dtype=float)
+
+
+def _pick_by_colour(kits_bgr, kit_hex):
+    """Index (0/1) of the kit whose median shirt colour is closest to the named colour. Coloured
+    kits compare by hue; a white / black / grey kit compares by saturation and lightness so that
+    'white' picks the pale kit even under a warm evening sky."""
+    target = _hex_bgr(kit_hex)
+    if target is None:
+        return None
+    t_hsv = cv2.cvtColor(np.uint8([[target]]), cv2.COLOR_BGR2HSV)[0, 0].astype(float)
+    k_hsv = [cv2.cvtColor(np.uint8([[np.clip(k, 0, 255)]]), cv2.COLOR_BGR2HSV)[0, 0].astype(float) for k in kits_bgr]
+    if t_hsv[1] < 60:                                   # neutral target: white / grey / black
+        scores = [abs(k[1] - t_hsv[1]) / 255.0 + abs(k[2] - t_hsv[2]) / 255.0 for k in k_hsv]
+    else:
+        def hue_d(a, b):
+            d = abs(a - b) % 180
+            return min(d, 180 - d) / 90.0
+        # a neutral kit can never be the coloured target
+        scores = [hue_d(k[0], t_hsv[0]) + (1.0 if k[1] < 50 else 0.0) for k in k_hsv]
+    best = int(np.argmin(scores))
+    # the named colour must actually be on the pitch: a neutral target needs a pale/dark kit,
+    # a coloured target needs a kit within ~40 degrees of hue; otherwise the setting is wrong
+    plausible = (k_hsv[best][1] < 90) if t_hsv[1] < 60 else (scores[best] < 0.45)
+    if not plausible or abs(scores[0] - scores[1]) < 0.05:
+        print(f"kit colour {kit_hex} does not match either kit (scores {[round(x, 2) for x in scores]}); not deciding by colour")
+        return None
+    return best
 
 
 def _confirm():

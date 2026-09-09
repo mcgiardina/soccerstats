@@ -52,6 +52,28 @@ def finish_run(run_id, status, error=None):
     client().table("stat_runs").update({"status": status, "finished_at": now(), "error": error}).eq("id", run_id).execute()
 
 
+def get_kit_color(game_id):
+    """Hex colour of our kit for this game, else the team's primary colour, else None."""
+    try:
+        g = client().table("games").select("kit_color").eq("id", game_id).limit(1).execute().data
+        if g and g[0].get("kit_color"):
+            return g[0]["kit_color"]
+        t = client().table("team_public").select("primary_color").limit(1).execute().data
+        return t[0].get("primary_color") if t else None
+    except Exception as e:  # noqa: BLE001
+        print("kit colour lookup failed:", str(e)[:120])
+        return None
+
+
+def update_run_params(run_id, extra):
+    """Merge keys into the run's params (e.g. which cluster was us and how it was decided)."""
+    if run_id == "dry-run":
+        return
+    rows = client().table("stat_runs").select("params").eq("id", run_id).limit(1).execute().data
+    params = {**((rows[0].get("params") or {}) if rows else {}), **extra}
+    client().table("stat_runs").update({"params": params}).eq("id", run_id).execute()
+
+
 def get_team_choice(game_id):
     """Persisted 'which cluster is us' answer lives in the run params of the last done run."""
     rows = client().table("stat_runs").select("params").eq("game_id", game_id).eq("status", "done").order("finished_at", desc=True).limit(1).execute().data

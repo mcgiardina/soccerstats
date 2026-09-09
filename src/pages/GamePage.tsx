@@ -293,8 +293,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               ) : null}
               {panel === "analysis" ? (
                 <div>
-                  <p className="small muted">Analysis runs on your Mac, never automatically. Queue a run here, then execute it:</p>
-                  <pre className="chapters">cd analyzer && python analyze.py --game-id {g.id}</pre>
+                  <p className="small muted">Nothing runs on its own. Queue a run here and the Mac mini worker picks it up within a minute (about an hour per game). It tells the teams apart by the kit colour set on this game{g.kit_color ? "" : " (none set: the team colour is used)"}.</p>
+                  <div className="row" style={{ alignItems: "center", gap: 8, marginBottom: 8 }}><span className="small muted">Our kit:</span><span style={{ display: "inline-block", width: 18, height: 18, borderRadius: 6, background: g.kit_color || "var(--primary)", border: "1px solid var(--line)" }} /><span className="small mono">{g.kit_color || "team colour"}</span>{admin ? <button className="btn sm" onClick={() => setEditGame(true)}>Change</button> : null}</div>
                   <button className="btn primary sm" disabled={!video} onClick={queueRun}>Queue analysis run</button>
                   {b.runs.length ? (
                     <div style={{ marginTop: ".75rem" }}>

@@ -88,6 +88,10 @@ Weekly flow: upload the game, add it in the app, press **Queue analysis run**. T
 picks it up within a minute, and the machine tags appear in the app when it finishes.
 The first run of a new season asks which kit is "us": run `analyze.py --game-id <id>`
 once by hand on the mini (or set `params.us_cluster` on the queued run) and it remembers.
+Unattended runs decide us/them from the game's **kit colour** (Edit game → "Our kit colour",
+default the team colour in Settings): the two shirt clusters are matched to it by hue, or by
+lightness for a white / black kit. The choice and how it was made land in the run's params
+(`us_cluster`, `team_pick`) and are reused by later runs of the same game.
 
 ## Better models (recommended, no account needed)
 Roboflow publishes pre-trained football weights in the MIT-licensed `roboflow/sports` repo:
