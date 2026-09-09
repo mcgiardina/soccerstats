@@ -18,11 +18,14 @@ interface Handlers {
   onTag: (type: TagType, opposing: boolean) => void;
   onTogglePlay: () => void;
   onNudge: (delta: number) => void;
+  /** transport keys (space, arrows) for everyone */
   enabled: boolean;
+  /** tagging letter keys, admin only */
+  tagging: boolean;
 }
 
-// Shift + key = opposing team. Space toggles play. Arrows nudge ±5s, shift+arrows ±30s.
-export function useHotkeys({ onTag, onTogglePlay, onNudge, enabled }: Handlers) {
+// Space toggles play. Arrows skip ±5s, shift+arrows ±30s. Letters tag (admin); shift + letter = opposing team.
+export function useHotkeys({ onTag, onTogglePlay, onNudge, enabled, tagging }: Handlers) {
   useEffect(() => {
     if (!enabled) return;
     function handler(e: KeyboardEvent) {
@@ -33,10 +36,11 @@ export function useHotkeys({ onTag, onTogglePlay, onNudge, enabled }: Handlers) 
       if (k === " ") { e.preventDefault(); onTogglePlay(); return; }
       if (e.key === "ArrowLeft") { e.preventDefault(); onNudge(e.shiftKey ? -30 : -5); return; }
       if (e.key === "ArrowRight") { e.preventDefault(); onNudge(e.shiftKey ? 30 : 5); return; }
+      if (!tagging) return;
       const hk = HOTKEYS.find((h) => h.key === k);
       if (hk) { e.preventDefault(); onTag(hk.type, e.shiftKey); }
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onTag, onTogglePlay, onNudge, enabled]);
+  }, [onTag, onTogglePlay, onNudge, enabled, tagging]);
 }

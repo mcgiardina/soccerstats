@@ -25,6 +25,19 @@ import { copyText, shareUrl } from "../lib/links";
 import { fetchOEmbed, parseYouTubeId, watchUrl } from "../lib/youtube";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
 
+function SkipIcon({ dir, n }: { dir: "back" | "fwd"; n: number }) {
+  const flip = dir === "back" ? "scale(-1,1) translate(-24,0)" : undefined;
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <g transform={flip} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 4a8 8 0 1 1-7.5 5.2" />
+        <path d="M12 1.5L15 4l-3 2.5" fill="currentColor" stroke="none" />
+      </g>
+      <text x="12" y="15.2" textAnchor="middle" fontSize={n >= 10 ? 7.5 : 8.5} fontWeight="800" fill="currentColor" fontFamily="var(--font)">{n}</text>
+    </svg>
+  );
+}
+
 export default function GamePage({ shareView = false }: { shareView?: boolean }) {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
@@ -79,7 +92,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   }, [b, video, current, reload, showToast]);
 
   useHotkeys({
-    enabled: admin && !editing && !placing && !editGame,
+    enabled: !editing && !placing && !editGame,
+    tagging: admin,
     onTag,
     onTogglePlay: () => player.current?.togglePlay(),
     onNudge: (d) => player.current?.nudge(d),
@@ -175,9 +189,18 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             <>
               <YouTubePlayer ref={player} youtubeId={video.youtube_id} startAt={startAt} onTime={setCurrent} onDuration={setDuration} />
               <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={visibleTags} onSeek={seek} />
-              <div className="row small muted" style={{ justifyContent: "space-between" }}>
-                <span className="mono">{toMatchTime(video, current).label}</span>
-                <a href={watchUrl(video.youtube_id, current)} target="_blank" rel="noreferrer">Open on YouTube ↗</a>
+              <div className="transport">
+                <span className="mono clock">{toMatchTime(video, current).label}</span>
+                <div className="transport-btns" role="group" aria-label="Playback">
+                  <button className="btn icon" title="Back 30 seconds (shift+←)" onClick={() => player.current?.nudge(-30)}><SkipIcon dir="back" n={30} /></button>
+                  <button className="btn icon" title="Back 5 seconds (←)" onClick={() => player.current?.nudge(-5)}><SkipIcon dir="back" n={5} /></button>
+                  <button className="btn icon play" title="Play / pause (space)" onClick={() => player.current?.togglePlay()}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+                  </button>
+                  <button className="btn icon" title="Forward 5 seconds (→)" onClick={() => player.current?.nudge(5)}><SkipIcon dir="fwd" n={5} /></button>
+                  <button className="btn icon" title="Forward 30 seconds (shift+→)" onClick={() => player.current?.nudge(30)}><SkipIcon dir="fwd" n={30} /></button>
+                </div>
+                <a className="small muted" href={watchUrl(video.youtube_id, current)} target="_blank" rel="noreferrer">Open on YouTube ↗</a>
               </div>
               <div className="title-row">
                 <div>
