@@ -10,6 +10,7 @@ export interface TrendPoint {
   shotsFor: number; shotsAgainst: number;
   xgFor: number | null; xgAgainst: number | null;
   possession: number | null;
+  savesFor: number; savesAgainst: number;
 }
 
 export function buildTrend(d: SeasonData): TrendPoint[] {
@@ -20,7 +21,7 @@ export function buildTrend(d: SeasonData): TrendPoint[] {
       return {
         id: g.id, date: g.played_on, label: `${fmtDateShort(g.played_on)} ${g.opponent}`,
         goalsFor: s.us.goals, goalsAgainst: s.them.goals, shotsFor: s.us.shots, shotsAgainst: s.them.shots,
-        xgFor: s.us.xg, xgAgainst: s.them.xg, possession: s.us.possession,
+        xgFor: s.us.xg, xgAgainst: s.them.xg, possession: s.us.possession, savesFor: s.us.saves, savesAgainst: s.them.saves,
       };
     });
 }

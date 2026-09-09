@@ -31,6 +31,15 @@ export interface SideSummary {
   corners: number;
   freeKicks: number;
   setPieceGoals: number;
+  /** saves made by this side's keeper (human 'save' tags + confirmed machine saves) */
+  saves: number;
+  /** clear chances tagged that were not shots ('chance' tags) */
+  chances: number;
+  /** on-target share of shots, 0..1, when on-target data exists */
+  accuracy: number | null;
+  /** average xG per located shot */
+  xgPerShot: number | null;
+  penalties: number;
 }
 
 export interface GameSummary {
@@ -91,6 +100,11 @@ export function summarizeGame(
       corners: mine.filter((t) => t.type === "corner").length,
       freeKicks: mine.filter((t) => t.type === "free_kick").length,
       setPieceGoals: mine.filter((t) => SET_PIECE_TYPES.includes(t.type) && t.outcome === "goal").length,
+      saves: mine.filter((t) => t.type === "save").length,
+      chances: mine.filter((t) => t.type === "chance").length,
+      accuracy: shotsOnTarget != null && shotTags.length ? shotsOnTarget / shotTags.length : null,
+      xgPerShot: xg != null && located.length ? Math.round((xg / located.length) * 100) / 100 : null,
+      penalties: mine.filter((t) => t.type === "penalty").length,
     };
   }
 

@@ -33,6 +33,7 @@ export default function ReportCard({ b }: { b: GameBundle }) {
         </div>
       ) : null}
       {b.buckets.length ? <div className="sec"><h3>Momentum</h3><Momentum buckets={b.buckets} /></div> : null}
+      {(s.us.chances || s.them.chances) ? <div className="sec"><h3>Chances</h3><div className="small">Clear chances that didn't become shots: us {s.us.chances}, them {s.them.chances}.</div></div> : null}
       <div className="sec"><h3>Set pieces</h3>
         <div className="small">Us: {sp.us} ({s.us.corners} corners, {s.us.freeKicks} FKs), {s.us.setPieceGoals} goal{s.us.setPieceGoals === 1 ? "" : "s"}. Them: {sp.them} ({s.them.corners} corners, {s.them.freeKicks} FKs), {s.them.setPieceGoals} goal{s.them.setPieceGoals === 1 ? "" : "s"}.</div>
       </div>

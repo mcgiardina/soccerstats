@@ -22,11 +22,16 @@ export default function StatsPanel({ s, compact }: { s: GameSummary; compact?: b
           <tr><V v={s.us.shots} /><td className="lbl">Shots</td><V v={s.them.shots} /></tr>
           <tr><V v={s.us.shotsOnTarget} /><td className="lbl">On target</td><V v={s.them.shotsOnTarget} /></tr>
           <tr><V v={s.us.xg != null ? s.us.xg.toFixed(2) : null} /><td className="lbl">xG*</td><V v={s.them.xg != null ? s.them.xg.toFixed(2) : null} /></tr>
+          <tr><V v={s.us.saves} /><td className="lbl">Saves</td><V v={s.them.saves} /></tr>
           {!compact ? (
             <>
+              <tr><V v={s.us.chances} /><td className="lbl">Chances</td><V v={s.them.chances} /></tr>
+              <tr><V v={s.us.accuracy != null ? Math.round(s.us.accuracy * 100) : null} suffix="%" /><td className="lbl">Shot accuracy</td><V v={s.them.accuracy != null ? Math.round(s.them.accuracy * 100) : null} suffix="%" /></tr>
+              <tr><V v={s.us.xgPerShot != null ? s.us.xgPerShot.toFixed(2) : null} /><td className="lbl">xG per shot*</td><V v={s.them.xgPerShot != null ? s.them.xgPerShot.toFixed(2) : null} /></tr>
               <tr><V v={s.us.turnovers} machine={posM(s.us.turnoversSource)} /><td className="lbl">Turnovers</td><V v={s.them.turnovers} machine={posM(s.them.turnoversSource)} /></tr>
               <tr><V v={s.us.corners} /><td className="lbl">Corners</td><V v={s.them.corners} /></tr>
               <tr><V v={s.us.freeKicks} /><td className="lbl">Free kicks</td><V v={s.them.freeKicks} /></tr>
+              {(s.us.penalties || s.them.penalties) ? <tr><V v={s.us.penalties} /><td className="lbl">Penalties</td><V v={s.them.penalties} /></tr> : null}
             </>
           ) : null}
         </tbody>
