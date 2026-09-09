@@ -5,6 +5,8 @@ Returns {"left","right","top","bottom","crossbar","score"} in image pixels or No
 import cv2
 import numpy as np
 
+from analyzer.teams import field_colour, is_field_pixel
+
 
 def _white_mask(roi):
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -13,7 +15,7 @@ def _white_mask(roi):
     return m
 
 
-def find_goal(img, keeper_box, kh=None):
+def find_goal(img, keeper_box, kh=None, strict=True):
     x1, y1, x2, y2 = [int(v) for v in keeper_box[:4]]
     kh = float(kh or max(12, y2 - y1))
     cx, feet = (x1 + x2) / 2, float(y2)
@@ -24,7 +26,7 @@ def find_goal(img, keeper_box, kh=None):
     if roi.size == 0 or roi.shape[0] < 8 or roi.shape[1] < 8:
         return None
     white = _white_mask(roi)
-    lines = cv2.HoughLinesP(white, 1, np.pi / 180, threshold=max(12, int(0.5 * kh)), minLineLength=max(8, int(0.6 * kh)), maxLineGap=max(3, int(0.3 * kh)))
+    lines = cv2.HoughLinesP(white, 1, np.pi / 180, threshold=max(8, int(0.35 * kh)), minLineLength=max(8, int(0.6 * kh)), maxLineGap=max(3, int(0.3 * kh)))
     if lines is None:
         return None
     bars, posts = [], []
@@ -51,7 +53,7 @@ def find_goal(img, keeper_box, kh=None):
         return None
     # posts near the bar ends, hanging down from the bar
     def post_near(x):
-        cands = [p for p in posts if abs(p[0] - x) < 0.5 * kh and p[1] <= y + 0.5 * kh and p[2] >= y + 0.5 * kh]
+        cands = [p for p in posts if abs(p[0] - x) < 0.8 * kh and p[1] <= y + 0.5 * kh and p[2] >= y + 0.5 * kh]
         return max(cands, key=lambda p: p[3]) if cands else None
     lp, rp = post_near(L), post_near(R)
     n_posts = int(lp is not None) + int(rp is not None)
@@ -74,5 +76,41 @@ def find_goal(img, keeper_box, kh=None):
     # the keeper should stand within the mouth (plus a little), not beside a random white line
     if not (L - 1.0 * kh <= cx <= R + 1.0 * kh):
         return None
+    # A crossbar is a thin, continuous bright line. A row of parked cars or a white fence rail
+    # behind the end line gives long bright Hough lines too, but as thick blobs with gaps.
+    bar_y = int(y - ry1)
+    reach = max(2, int(0.35 * kh))
+    thick, covered, ncols = [], 0, 0
+    for xx in range(int(max(0, L - rx1)), int(min(roi.shape[1], R - rx1)), 2):
+        ncols += 1
+        col = white[max(0, bar_y - reach):min(roi.shape[0], bar_y + reach + 1), xx] > 0
+        if not col.any():
+            continue
+        # vertical run of white containing (or nearest to) the bar row
+        idx = np.flatnonzero(col)
+        centre = min(len(col) - 1, reach)
+        j = idx[np.argmin(np.abs(idx - centre))]
+        a = b = j
+        while a > 0 and col[a - 1]:
+            a -= 1
+        while b < len(col) - 1 and col[b + 1]:
+            b += 1
+        covered += 1
+        thick.append(b - a + 1)
+    coverage = covered / max(1, ncols)
+    bar_thick = float(np.median(thick)) if thick else 99.0
+    # (measured, not gated: real crossbars against bright sky measure 7-10 px too)
+    # A goal stands on the pitch: through the net mesh the lower half of the mouth is mostly
+    # grass. A row of parked cars, a fence or a tent behind the end line is not.
+    gy1 = int(max(0, (y + bottom) / 2))
+    gy2 = int(min(H, bottom))
+    gx1, gx2 = int(max(0, L)), int(min(W, R))
+    lower = img[gy1:gy2, gx1:gx2]
+    if lower.size == 0:
+        return None
+    hsv = cv2.cvtColor(lower, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    grass_frac = float(is_field_pixel(hsv, field_colour(img)).mean())
+    if strict and grass_frac < 0.35:
+        return None
     score = min(1.0, 0.4 + 0.2 * n_posts + 0.1 * min(2.0, width / (4.5 * kh)) + min(0.2, white_frac))
-    return {"left": float(L), "right": float(R), "top": float(y), "bottom": float(bottom), "crossbar": True, "posts": n_posts, "white": round(white_frac, 2), "score": round(score, 2), "kh": kh}
+    return {"left": float(L), "right": float(R), "top": float(y), "bottom": float(bottom), "crossbar": True, "posts": n_posts, "white": round(white_frac, 2), "grass": round(grass_frac, 2), "thick": bar_thick, "cover": round(coverage, 2), "score": round(score, 2), "kh": kh}

@@ -4,6 +4,10 @@ ball detection (a false positive flickering in) fails the direction-consistency 
 Recall over precision; a human confirms in the app. Team = whoever had the ball just before."""
 import numpy as np
 
+# Machine tags are stamped this many seconds before the kick so a viewer lands just ahead of it.
+# The app adds its own lead-in on top (CONFIG.leadInSeconds).
+PRE_ROLL = 0.5
+
 
 def _holder_before(sequence, t, lookback_s=2.0):
     holder = None
@@ -47,7 +51,7 @@ def candidates(dets, fps=5.0, min_speed=400.0, speed_jump=2.0, min_gap_s=8, sequ
         jump = v1 / max(v_before, 60.0)
         conf = 0.35 + 0.25 * min(1.0, (jump - speed_jump) / 6.0) + 0.25 * max(0.0, cos - 0.6) / 0.4 + 0.1 * min(1.0, v1 / (2 * min_speed))
         team = _holder_before(sequence, t1) if sequence else None
-        out.append({"t": max(0.0, t1 - 1.0), "confidence": round(min(0.95, conf), 3), "team": team,
+        out.append({"t": max(0.0, t1 - PRE_ROLL), "confidence": round(min(0.95, conf), 3), "team": team,
                     "speed_px_s": round(v1), "jump": round(jump, 1)})
         last_t = t2
     print(f"{len(out)} shot candidates")
@@ -65,7 +69,7 @@ def classify(cands, dets, H, window_s=1.0, min_conf=0.4):
     ts = sorted(by_t)
     shots, kicks = [], []
     for c in cands:
-        t_kick = c["t"] + 1.0            # candidates store t-1s for the tag
+        t_kick = c["t"] + PRE_ROLL            # candidates store t-1s for the tag
         # best homography within the window
         best = None
         for t, (Hm, conf) in H.items():
@@ -118,7 +122,7 @@ def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, max_range_h=22.0, end
     ts = [d.t for d in dets]
     shots, rest = [], []
     for c in kicks:
-        t_kick = c["t"] + 1.0
+        t_kick = c["t"] + PRE_ROLL
         i0 = max(0, int(np.searchsorted(ts, t_kick - 0.3)))
         i1 = min(len(dets), int(np.searchsorted(ts, t_kick + window_s)))
         win = dets[i0:i1]

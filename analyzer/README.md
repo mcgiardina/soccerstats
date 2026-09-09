@@ -47,6 +47,19 @@ sample games in Sept 2026:
 - Spectators sitting on grass, and referees in kit-like colours, can leak into a team
   cluster; the four-cluster fit drops most of them.
 
+Overnight findings on the two BallerCam games (Sept 2026):
+- The crossbar/posts detector saw the goal in ~25-30% of keeper frames and locked onto rows
+  of parked cars or fence rails behind the end line. YOLO-World prompted with "goalpost with
+  net" finds the real goal in the same frames; goals on the neighbouring pitch are rejected
+  by scale (a full-size goal is > 2.2 player heights wide and taller than a player).
+- The camera pans during a shot, so the goal box is detected per frame and interpolated; the
+  ball is judged in goal-relative coordinates.
+- The stock ball detectors put the ball in the sky / tree line / spectators' shoes on the
+  Lady Revo game, and those jumps became kick candidates. Every ball detection now has to sit
+  on grass (`detect.ball_on_pitch`). YOLO-World's "soccer ball" sees the ball in ~85% of
+  shot-window frames against ~75% for the stock pair and is merged in by continuity.
+- Crowd-noise audio peaks and pitch-keypoint goal-line landmarks did not help (dropped).
+
 Never runs automatically. The web app's "Queue analysis run" button only inserts a
 `stat_runs` row with `status='queued'`; this CLI claims it (or creates one if none exists).
 
@@ -85,7 +98,12 @@ automatically. This is what unlocks referee/keeper exclusion by class, real shot
 3. `detect.py` Ultralytics YOLO + ByteTrack. Roboflow football weights if `PLAYER_WEIGHTS` set, else COCO.
 4. `teams.py` KMeans(2) on torso colours. Aborts possession if clusters are not separable.
 5. `possession.py` nearest-player attribution, 1.5 s smoothing, per half + 5-minute buckets, turnovers.
-6. `shots.py` ball acceleration toward a goal region → machine shot tags (recall-first).
+6. `shots.py` ball speed jumps → kick candidates. `goalshots.py` judges each one against the
+   goal frame found in the image: `goalworld.py` (YOLO-World zero-shot, prompts "goalpost with
+   net" and "soccer ball", built into `goal-ball-world.pt` by `get_weights.sh`) tracks the goal
+   through the camera pan and supplies the ball track inside the window; `goalposts.py`
+   (crossbar + posts, classic CV) is the fallback when the world model is unavailable.
+   Outcomes: on_target / off_target / save / goal? / cross. Keeper-approach test as last resort.
 7. `homography.py` pitch keypoints → homography (only if `PITCH_WEIGHTS` set). Feeds machine shot
    locations and `shape_snapshots`. Prefers a `wide_fixed` video when the game has one.
 7b. `dewarp.py` fisheye de-warp for a raw wide-angle source such as the BallerCam 4K fisheye,

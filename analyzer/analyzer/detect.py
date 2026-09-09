@@ -3,6 +3,7 @@ tiny ball lives. Per-frame player ids are just list indices and are never writte
 import os
 from dataclasses import dataclass, field
 
+import cv2
 import numpy as np
 from tqdm import tqdm
 
@@ -58,19 +59,44 @@ BALL_CONF = 0.10
 PERSON_CONF = 0.35
 
 
+def ball_on_pitch(img, cx, cy, half=None, min_field=0.35):
+    """A ball is on the playing surface: the ring around it is mostly grass. Rejects the sky,
+    the tree line, floodlight heads and spectators' white shoes, which the ball detectors
+    mistake for the ball on panned footage (Lady Revo game: most cached balls were in the sky)."""
+    from analyzer.teams import field_colour, is_field_pixel
+    h, w = img.shape[:2]
+    half = int(half or 18)
+    x1, x2 = max(0, int(cx) - 2 * half), min(w, int(cx) + 2 * half)
+    y1, y2 = max(0, int(cy) - 2 * half), min(h, int(cy) + 2 * half)
+    if x2 - x1 < 4 or y2 - y1 < 4:
+        return False
+    patch = img[y1:y2, x1:x2]
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    return float(is_field_pixel(hsv, field_colour(img)).mean()) >= min_field
+
+
+def _pick_ball(img, cands):
+    """cands: (cx, cy, conf, half_size). Highest-confidence ball that is on the pitch."""
+    for cx, cy, cf, half in sorted(cands, key=lambda c: -c[2]):
+        if ball_on_pitch(img, cx, cy, half):
+            return (cx, cy, cf)
+    return None
+
+
 def run(frames, backend="local"):
     model, ball_model, device, football = _model(backend)
     out = []
     for f in tqdm(frames, desc="detect"):
         res = model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ)[0]
         fd = FrameDet(t=f.t, img=f.img, size=f.img.shape[:2])
+        ball_cands = []
         if ball_model is not None:
             rb = ball_model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ, classes=[COCO_BALL])[0]
             if rb.boxes is not None and len(rb.boxes):
-                i = int(rb.boxes.conf.argmax())
-                x1, y1, x2, y2 = rb.boxes.xyxy[i].tolist()
-                fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, float(rb.boxes.conf[i]))
+                for (x1, y1, x2, y2), cf in zip(rb.boxes.xyxy.tolist(), rb.boxes.conf.tolist()):
+                    ball_cands.append(((x1 + x2) / 2, (y1 + y2) / 2, float(cf), max(x2 - x1, y2 - y1)))
         if res.boxes is None:
+            fd.ball = _pick_ball(f.img, ball_cands)
             if fd.ball is not None:
                 fd.ball = fd.ball[:2]
             out.append(fd); continue
@@ -85,8 +111,7 @@ def run(frames, backend="local"):
                 continue
             if football:
                 if c == RF_BALL:
-                    if fd.ball is None or cf > fd.ball[2]:
-                        fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, cf)
+                    ball_cands.append(((x1 + x2) / 2, (y1 + y2) / 2, float(cf), max(x2 - x1, y2 - y1)))
                 elif c == RF_PLAYER:
                     fd.players.append((x1, y1, x2, y2, len(fd.players)))
                 elif c == RF_GK:
@@ -94,10 +119,10 @@ def run(frames, backend="local"):
                 # referees dropped
             else:
                 if c == COCO_BALL:
-                    if fd.ball is None or cf > fd.ball[2]:
-                        fd.ball = ((x1 + x2) / 2, (y1 + y2) / 2, cf)
+                    ball_cands.append(((x1 + x2) / 2, (y1 + y2) / 2, float(cf), max(x2 - x1, y2 - y1)))
                 elif c == COCO_PERSON:
                     fd.players.append((x1, y1, x2, y2, len(fd.players)))
+        fd.ball = _pick_ball(f.img, ball_cands)
         if fd.ball is not None:
             fd.ball = fd.ball[:2]
         out.append(fd)

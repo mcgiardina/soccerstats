@@ -1,8 +1,9 @@
 """Shot / on-target / goal classification against the goal frame found in the image.
 
 For each kick candidate we look at the ball's image path over the next few seconds and the
-goal mouth located near the visible keeper (goalposts.find_goal). Everything is in pixels,
-scaled by keeper height, so it works on any camera that shows the goal.
+goal mouth found in the frame (goalworld: YOLO-World zero-shot; goalposts crossbar detector as
+fallback). Everything is in pixels, scaled by keeper height (0.6 goal heights), so it works on
+any camera that shows the goal.
 
   on_target : the ball's path enters the goal mouth (between the posts, below the bar)
   goal?     : it enters the mouth and is then not seen again for a while (in the net), and
@@ -14,7 +15,8 @@ scaled by keeper height, so it works on any camera that shows the goal.
 """
 import numpy as np
 
-from analyzer import goalposts
+from analyzer import goalposts, goalworld
+from analyzer.shots import PRE_ROLL
 
 
 def _seg_intersects_rect(p, q, rect, pad=0.0):
@@ -39,48 +41,85 @@ def _seg_intersects_rect(p, q, rect, pad=0.0):
     return True
 
 
-def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2):
-    """kicks: candidate dicts with 't' (= kick time - 1s). frame_at(t) -> BGR image or None.
+def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=None):
+    """kicks: candidate dicts with 't' (= kick time - PRE_ROLL). frame_at(t) -> BGR image or None.
+    finder: goalworld.GoalFinder (default: shared instance; falls back to the crossbar detector).
     Returns list of dicts with outcome and goal geometry."""
+    finder = finder or goalworld.default_finder()
     ts = [d.t for d in dets]
     by_i = lambda t: int(np.clip(np.searchsorted(ts, t), 0, len(dets) - 1))
     out = []
     for c in kicks:
-        t_kick = c["t"] + 1.0
+        t_kick = c["t"] + PRE_ROLL
         i0, i1 = by_i(t_kick - 0.4), by_i(t_kick + horizon_s)
         win = dets[i0:i1 + 1]
-        # goal mouth: median of the detections across the window (needs a few agreeing frames)
+        # goal mouth per frame (the camera pans, so the goal moves in the image); a few agreeing
+        # frames are required, and the ball is judged in goal-relative coordinates.
         hits = []
         for d in win[::2]:
-            if not d.keepers:
+            if finder is None and not d.keepers:
                 continue
             img = frame_at(d.t)
             if img is None:
                 continue
+            if finder is not None:
+                g = finder.find(img, d.keepers, d.players)
+                if g:
+                    hits.append((d.t, g))
+                continue
             for k in d.keepers:
                 g = goalposts.find_goal(img, k)
                 if g:
-                    hits.append(g); break
+                    hits.append((d.t, g)); break
         res = {**c, "outcome": "kick"}
         if len(hits) < 2:
             out.append(res); continue
-        # keep the hits that agree with the median (camera may pan a little)
-        med = {k: float(np.median([h[k] for h in hits])) for k in ("left", "right", "top", "bottom", "kh")}
-        agree = [h for h in hits if abs(h["left"] - med["left"]) < 1.5 * med["kh"] and abs(h["top"] - med["top"]) < 1.0 * med["kh"]]
+        med_w = float(np.median([h["right"] - h["left"] for _, h in hits]))
+        med_h = float(np.median([h["bottom"] - h["top"] for _, h in hits]))
+        kh = float(np.median([h["kh"] for _, h in hits]))
+        # drop outliers in size (the goal on the next pitch, a partial detection)
+        agree = [(t, h) for t, h in hits if abs((h["right"] - h["left"]) - med_w) < 0.35 * med_w and abs((h["bottom"] - h["top"]) - med_h) < 0.5 * med_h]
         if len(agree) < 2:
             out.append(res); continue
-        goal = {k: float(np.median([h[k] for h in agree])) for k in ("left", "right", "top", "bottom", "kh")}
-        kh = goal["kh"]
-        rect = (goal["left"], goal["top"], goal["right"], goal["bottom"])
+        ht = np.array([t for t, _ in agree])
+        hcx = np.array([(h["left"] + h["right"]) / 2 for _, h in agree])
+        hby = np.array([h["bottom"] for _, h in agree])
+
+        def anchor_at(t):
+            return float(np.interp(t, ht, hcx)), float(np.interp(t, ht, hby))
+
+        # goal-relative frame: origin at the centre of the goal line, y up is negative
+        rect = (-med_w / 2, -med_h, med_w / 2, 0.0)
         res["goal_hits"] = len(agree)
-        balls = [(d.t, d.ball) for d in win if d.ball]
+        # ball track through the window: YOLO-World balls (on the pitch) merged with the cached
+        # detection, chosen by continuity with the previous position
+        balls = []
+        prev = None
+        for d in win:
+            cands = [(d.ball[0], d.ball[1], 0.5)] if d.ball else []
+            if finder is not None:
+                img = frame_at(d.t)
+                if img is not None:
+                    cands += [(b[0], b[1], b[2]) for b in finder.balls(img)]
+            if not cands:
+                continue
+            if prev is not None:
+                near = [b for b in cands if np.hypot(b[0] - prev[0], b[1] - prev[1]) <= 6.0 * kh]
+                pick = max(near, key=lambda b: b[2]) if near else max(cands, key=lambda b: b[2])
+            else:
+                pick = max(cands, key=lambda b: b[2])
+            prev = pick
+            ax, ay = anchor_at(d.t)
+            balls.append((d.t, (pick[0] - ax, pick[1] - ay)))
         if len(balls) < 2:
             out.append(res); continue
-        # distance from kick origin to goal centre, in keeper heights
-        gx, gy = (goal["left"] + goal["right"]) / 2, goal["bottom"]
+        res["ball_track"] = [(round(t, 1), round(p[0] + anchor_at(t)[0], 1), round(p[1] + anchor_at(t)[1], 1)) for t, p in balls]
+        gx, gy = 0.0, 0.0
         b0 = balls[0][1]
         dist0 = float(np.hypot(b0[0] - gx, b0[1] - gy) / kh)
-        res.update({"goal_px": rect, "kh": kh, "range_h": round(dist0, 1)})
+        g_last = agree[len(agree) // 2][1]
+        res.update({"goal_px": (g_last["left"], g_last["top"], g_last["right"], g_last["bottom"]), "kh": kh, "range_h": round(dist0, 1),
+                    "goal_track": [(round(t, 1), round(x, 1), round(y, 1)) for t, x, y in zip(ht.tolist(), hcx.tolist(), hby.tolist())]})
         if dist0 > 30:
             out.append(res); continue
         entered_t, off_t, near_keeper_after, crossed_front = None, None, False, False
@@ -105,10 +144,11 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2):
             # keeper collects? ball seen within 0.8 kh of the keeper after entering
             later = [(t, b) for t, b in balls if t > entered_t]
             for t, b in later:
+                ax, ay = anchor_at(t)
                 for d in win:
                     if abs(d.t - t) < 1e-3 and d.keepers:
                         for k in d.keepers:
-                            if np.hypot((k[0] + k[2]) / 2 - b[0], k[3] - b[1]) <= 0.8 * kh:
+                            if np.hypot((k[0] + k[2]) / 2 - (b[0] + ax), k[3] - (b[1] + ay)) <= 0.8 * kh:
                                 near_keeper_after = True
             last_seen = balls[-1][0]
             gone = (t_kick + horizon_s) - last_seen >= 1.2 and abs(last_seen - entered_t) < 0.8

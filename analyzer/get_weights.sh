@@ -11,5 +11,9 @@ VENV="$(cd "$(dirname "$0")" && pwd)/.venv/bin"
 "$VENV/gdown" -O "$DIR/football-player-detection.pt" "https://drive.google.com/uc?id=17PXFNlx-jI7VjVo_vQnB1sONjRyvoB-q"
 "$VENV/gdown" -O "$DIR/football-ball-detection.pt"   "https://drive.google.com/uc?id=1isw4wx-MK9h9LMr36VvIWlJD6ppUvw7V"
 "$VENV/gdown" -O "$DIR/football-pitch-detection.pt"  "https://drive.google.com/uc?id=1Ma5Kt86tgpdjCTKfum79YMgNnSjcoOyf"
+# YOLO-World (ultralytics, AGPL like the rest of ultralytics) for the goal frame and the ball in
+# shot windows: builds goal-ball-world.pt with the text prompts baked in, so later runs need
+# neither the CLIP encoder nor the network.
+PYTHONPATH="$(dirname "$VENV")/.." "$VENV/python" -c "from analyzer.goalworld import GoalFinder; GoalFinder(device='cpu'); print('goal-ball-world.pt ready')"
 ls -la "$DIR"
 echo "done: the analyzer picks these up automatically (env PLAYER_WEIGHTS / PITCH_WEIGHTS still override)."
