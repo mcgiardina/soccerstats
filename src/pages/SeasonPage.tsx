@@ -48,19 +48,35 @@ export default function SeasonPage() {
 
   return (
     <div className="page">
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: ".75rem" }}>
-        <div><h1 style={{ marginBottom: 0 }}>{CONFIG.teamName} · Season</h1><span className="muted small">{games.length} game{games.length === 1 ? "" : "s"} · {record.w}W {record.d}D {record.l}L</span></div>
-        {isAdmin ? <Link className="btn primary" to="/games/new">+ Add game</Link> : null}
+      <div className="hero">
+        <div className="reveal">
+          <div className="eyebrow">{CONFIG.teamName} · season</div>
+          <div className="kpi">
+            <span className="num">{record.w}<small>W</small></span>
+            <span className="num">{record.d}<small>D</small></span>
+            <span className="num">{record.l}<small>L</small></span>
+          </div>
+        </div>
+        <div className="kpi-row reveal">
+          <div className="item"><div className="v">{games.length}</div><div className="l">games</div></div>
+          <div className="item"><div className="v">{trend.reduce((a, p) => a + p.goalsFor, 0)}</div><div className="l">goals for</div></div>
+          <div className="item"><div className="v">{trend.reduce((a, p) => a + p.goalsAgainst, 0)}</div><div className="l">goals against</div></div>
+          {isAdmin ? <Link className="btn primary" to="/games/new" style={{ alignSelf: "center" }}>+ Add game</Link> : null}
+        </div>
       </div>
 
       <TrendCharts data={trend} />
 
       <div className="filters">
-        <input type="text" placeholder="Search notes & tag labels" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select value={opp} onChange={(e) => setOpp(e.target.value)}><option value="">All opponents</option>{opponents.map((o) => <option key={o}>{o}</option>)}</select>
-        <select value={comp} onChange={(e) => setComp(e.target.value)}><option value="">All competitions</option><option value="league">League</option><option value="tournament">Tournament</option><option value="friendly">Friendly</option></select>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
+        <div className="search"><input className="pill" type="text" placeholder="Search notes & tag labels" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <select className="pill" value={opp} onChange={(e) => setOpp(e.target.value)}><option value="">All opponents</option>{opponents.map((o) => <option key={o}>{o}</option>)}</select>
+        <div className="seg">
+          {[["", "All"], ["league", "League"], ["tournament", "Tournament"], ["friendly", "Friendly"]].map(([v, l]) => (
+            <button key={v} className={comp === v ? "on" : ""} onClick={() => setComp(v)}>{l}</button>
+          ))}
+        </div>
+        <input className="pill" type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" style={{ width: "auto" }} />
+        <input className="pill" type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" style={{ width: "auto" }} />
       </div>
 
       {games.length === 0 ? <div className="card muted">No games{isAdmin ? " yet. Add one to get started." : " published yet."}</div> : null}
@@ -71,16 +87,18 @@ export default function SeasonPage() {
           const cls = s.us.goals > s.them.goals ? "win" : s.us.goals < s.them.goals ? "loss" : "draw";
           const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && t.type === "goal");
           return (
-            <Link key={g.id} to={isAdmin ? `/games/${g.id}` : `/g/${g.id}`} className="game-card">
-              {v ? <img className="thumb" src={thumbnailUrl(v.youtube_id)} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}
+            <Link key={g.id} to={isAdmin ? `/games/${g.id}` : `/g/${g.id}`} className="game-card reveal">
+              {v ? <img className="thumb" src={thumbnailUrl(v.youtube_id, "hq")} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}
               <div className="body">
                 <div className="opp">{g.home_away === "away" ? "@ " : "vs "}{g.opponent}</div>
-                <div className="small muted">{fmtDate(g.played_on)}{g.competition ? ` · ${g.competition}` : ""}</div>
-                <div className="row" style={{ gap: ".4rem", marginTop: ".25rem" }}>
-                  {hasScore ? <span className={`score ${cls}`}>{s.us.goals}–{s.them.goals}</span> : <span className="muted small">no score</span>}
+                <div className="meta">
+                  <span className="small muted">{fmtDate(g.played_on)}{g.competition ? ` · ${g.competition}` : ""}</span>
+                  {hasScore ? <span className={`score pill ${cls}`}>{s.us.goals}–{s.them.goals}</span> : <span className="badge plain">no score</span>}
+                </div>
+                {(!g.published || !v) ? <div className="row" style={{ gap: ".4rem", marginTop: ".4rem" }}>
                   {!g.published ? <span className="badge draft">draft</span> : null}
                   {!v ? <span className="badge">no video</span> : null}
-                </div>
+                </div> : null}
               </div>
             </Link>
           );

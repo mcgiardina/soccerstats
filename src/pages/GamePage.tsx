@@ -164,19 +164,9 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   return (
     <div className="page game-page">
       {toast ? <div className="toast">{toast}</div> : null}
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: ".5rem" }}>
-        <div>
-          <Link to="/" className="small">← Season</Link>
-          <h1 style={{ marginBottom: 0 }}>{usFirst ? `${CONFIG.teamName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${CONFIG.teamName}` : ""}</h1>
-          <span className="muted small">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</span>
-          {!g.published ? <span className="badge draft" style={{ marginLeft: 8 }}>draft</span> : null}
-        </div>
-        <div className="row">
-          <button className="btn sm" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>🔗 Share</button>
-          <Link className="btn sm" to={`/${admin ? "games" : "g"}/${g.id}/report`}>Report card</Link>
-          {admin ? <button className={`btn sm ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
-          {admin ? <button className="btn sm" onClick={() => setEditGame(true)}>Edit</button> : null}
-        </div>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: ".6rem" }}>
+        <Link to="/" className="crumb">← Season</Link>
+        {!g.published ? <span className="badge draft">draft · only admins can see this</span> : null}
       </div>
 
       <div className="game-layout">
@@ -188,6 +178,18 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               <div className="row small muted" style={{ justifyContent: "space-between" }}>
                 <span className="mono">{toMatchTime(video, current).label}</span>
                 <a href={watchUrl(video.youtube_id, current)} target="_blank" rel="noreferrer">Open on YouTube ↗</a>
+              </div>
+              <div className="title-row">
+                <div>
+                  <h1>{usFirst ? `${CONFIG.teamName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${CONFIG.teamName}` : ""}</h1>
+                  <div className="sub">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
+                </div>
+                <div className="actions-pills">
+                  <button className="btn" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>↗ Share</button>
+                  <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link>
+                  {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
+                  {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
+                </div>
               </div>
               {admin ? (
                 <details className="keys-details">
@@ -203,6 +205,12 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             </>
           ) : (
             <div className="card">
+              <h1 style={{ marginBottom: ".25rem" }}>{usFirst ? `${CONFIG.teamName} ${scoreText} ` : ""}{g.opponent}{!usFirst ? ` ${scoreText} ${CONFIG.teamName}` : ""}</h1>
+              <div className="actions-pills" style={{ marginBottom: "1rem" }}>
+                <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link>
+                {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
+                {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
+              </div>
               <h2>No video yet</h2>
               {admin ? (
                 <div className="row"><input type="url" placeholder="Paste YouTube URL" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} />
@@ -215,12 +223,13 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
         <aside className="game-side">
           <div className="card side-card">
-            <div className="row" style={{ gap: ".25rem", marginBottom: ".5rem" }}>
-              <button className={`btn sm ${panel === "tags" ? "primary" : ""}`} onClick={() => setPanel("tags")}>Tags ({visibleTags.length})</button>
-              {admin && video ? <button className={`btn sm ${panel === "periods" ? "primary" : ""}`} onClick={() => setPanel("periods")}>Periods</button> : null}
-              {admin && video ? <button className={`btn sm ${panel === "chapters" ? "primary" : ""}`} onClick={() => setPanel("chapters")}>Chapters</button> : null}
-              {admin ? <button className={`btn sm ${panel === "analysis" ? "primary" : ""}`} onClick={() => setPanel("analysis")}>Analysis</button> : null}
-              {b.shapes.length ? <button className={`btn sm ${panel === "shape" ? "primary" : ""}`} onClick={() => setPanel("shape")}>Shape</button> : null}
+            {!admin && !b.shapes.length ? <h3 style={{ marginBottom: ".6rem" }}>Tags <span className="muted">· {visibleTags.length}</span></h3> : null}
+            <div className="seg" style={{ marginBottom: ".6rem", flexWrap: "wrap", display: !admin && !b.shapes.length ? "none" : undefined }}>
+              <button className={panel === "tags" ? "on" : ""} onClick={() => setPanel("tags")}>Tags · {visibleTags.length}</button>
+              {admin && video ? <button className={panel === "periods" ? "on" : ""} onClick={() => setPanel("periods")}>Periods</button> : null}
+              {admin && video ? <button className={panel === "chapters" ? "on" : ""} onClick={() => setPanel("chapters")}>Chapters</button> : null}
+              {admin ? <button className={panel === "analysis" ? "on" : ""} onClick={() => setPanel("analysis")}>Analysis</button> : null}
+              {b.shapes.length ? <button className={panel === "shape" ? "on" : ""} onClick={() => setPanel("shape")}>Shape</button> : null}
             </div>
             <div className="side-scroll">
               {panel === "tags" ? (
@@ -267,8 +276,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2 style={{ margin: 0 }}>Stats</h2>
-            <div className="row" style={{ gap: ".25rem" }}>
-              {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={`btn sm ${period === p ? "primary" : ""}`} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
+            <div className="seg">
+              {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
             </div>
           </div>
           <StatsPanel s={summary} />

@@ -47,12 +47,12 @@ export default function TagList(p: Props) {
   return (
     <div>
       <div className="row" style={{ marginBottom: ".5rem", justifyContent: "space-between" }}>
-        <div className="row" style={{ gap: ".25rem" }}>
+        <div className="seg light" style={{ flexWrap: "wrap" }}>
           {FILTERS.map((x) => (
-            <button key={x.key} className={`btn sm ${filter === x.key ? "primary" : ""}`} onClick={() => setFilter(x.key)}>{x.label}</button>
+            <button key={x.key} className={filter === x.key ? "on" : ""} onClick={() => setFilter(x.key)}>{x.label}</button>
           ))}
         </div>
-        <select value={side} onChange={(e) => setSide(e.target.value as "all" | "us" | "them")} style={{ width: "auto" }} className="small">
+        <select value={side} onChange={(e) => setSide(e.target.value as "all" | "us" | "them")} className="pill">
           <option value="all">both</option><option value="us">us</option><option value="them">them</option>
         </select>
       </div>

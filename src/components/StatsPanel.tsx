@@ -1,4 +1,5 @@
 import type { GameSummary } from "../lib/stats";
+import Gauge from "./Gauge";
 
 function V({ v, machine, suffix = "" }: { v: number | string | null | undefined; machine?: boolean; suffix?: string }) {
   if (v == null) return <td className="v muted">—</td>;
@@ -7,13 +8,17 @@ function V({ v, machine, suffix = "" }: { v: number | string | null | undefined;
 
 export default function StatsPanel({ s, compact }: { s: GameSummary; compact?: boolean }) {
   const posM = (src: string | null) => src === "machine";
+  const chip = (src: string | null) => src == null ? null : src === "machine" ? <span className="badge machine">≈ machine</span> : <span className="badge plain">confirmed</span>;
   return (
     <div>
+      <div className="gauges">
+        <Gauge value={s.us.possession} label="Possession · us" side="us" chip={chip(s.us.possessionSource)} />
+        <Gauge value={s.them.possession} label="Possession · them" side="them" chip={chip(s.them.possessionSource)} />
+      </div>
       <table className="stat-table">
         <thead><tr><th>Us</th><th></th><th>Them</th></tr></thead>
         <tbody>
           <tr><V v={s.us.goals} /><td className="lbl">Goals</td><V v={s.them.goals} /></tr>
-          <tr><V v={s.us.possession != null ? Math.round(s.us.possession) : null} machine={posM(s.us.possessionSource)} suffix="%" /><td className="lbl">Possession</td><V v={s.them.possession != null ? Math.round(s.them.possession) : null} machine={posM(s.them.possessionSource)} suffix="%" /></tr>
           <tr><V v={s.us.shots} /><td className="lbl">Shots</td><V v={s.them.shots} /></tr>
           <tr><V v={s.us.shotsOnTarget} /><td className="lbl">On target</td><V v={s.them.shotsOnTarget} /></tr>
           <tr><V v={s.us.xg != null ? s.us.xg.toFixed(2) : null} /><td className="lbl">xG*</td><V v={s.them.xg != null ? s.them.xg.toFixed(2) : null} /></tr>

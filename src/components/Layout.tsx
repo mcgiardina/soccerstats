@@ -17,11 +17,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         {isAdmin ? (
           <>
             <span className="pill">admin</span>
-            <Link to="/games/new">+ Game</Link>
-            <a href="#" onClick={(e) => { e.preventDefault(); logout(); }}>Sign out</a>
+            <Link to="/games/new" className="navlink primary">+ Game</Link>
+            <a href="#" className="navlink quiet" onClick={(e) => { e.preventDefault(); logout(); }}>Sign out</a>
           </>
         ) : (
-          <Link to="/login" className="tiny" style={{ opacity: 0.7 }}>Admin</Link>
+          <Link to="/login" className="navlink quiet">Admin</Link>
         )}
       </nav>
       {children}
