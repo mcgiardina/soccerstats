@@ -55,7 +55,7 @@ export default function ShotPlacer({ tag, existing, pitch, onSave, onClose }: Pr
           <label className="small"><input type="radio" checked={onTarget === false} onChange={() => setOnTarget(false)} /> off target</label>
           <label className="small"><input type="radio" checked={onTarget === null} onChange={() => setOnTarget(null)} /> unknown</label>
         </div>
-        <select value={bodyPart} onChange={(e) => setBodyPart(e.target.value as "foot" | "head" | "")} style={{ width: "auto" }}>
+        <select value={bodyPart} onChange={(e) => setBodyPart(e.target.value as "foot" | "head" | "")} className="pill">
           <option value="">body part?</option>
           <option value="foot">foot</option>
           <option value="head">head</option>

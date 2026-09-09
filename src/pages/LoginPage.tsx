@@ -18,7 +18,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="page" style={{ maxWidth: 420 }}>
+    <div className="page centered">
       <div className="card">
         <h1>Admin</h1>
         {isAdmin ? <p className="ok">You are signed in.</p> : null}

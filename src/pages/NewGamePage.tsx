@@ -49,7 +49,7 @@ export default function NewGamePage() {
         </label>
         {ytId ? (
           <div className="row" style={{ marginBottom: ".75rem" }}>
-            <img src={thumbnailUrl(ytId)} alt="" style={{ width: 120, borderRadius: 6 }} />
+            <img className="thumb-sm" src={thumbnailUrl(ytId, "hq")} alt="" style={{ maxWidth: 180 }} />
             <div className="small"><div><strong>{ytTitle ?? ytId}</strong></div><div className="muted">ID {ytId}. Duration is read from the player once you open the game.</div></div>
           </div>
         ) : null}

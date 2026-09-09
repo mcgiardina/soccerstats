@@ -44,9 +44,9 @@ export default function TagEditor({ tag, onSave, onClose, quick }: Props) {
       ) : null}
       {isSetPiece ? (
         <label className="field"><span>Outcome</span>
-          <div className="row">
+          <div className="seg">
             {(["goal", "shot", "cleared", "lost"] as SetPieceOutcome[]).map((o) => (
-              <button key={o} className={`btn ${outcome === o ? "primary" : ""}`} onClick={() => setOutcome(o)} autoFocus={o === "goal" && quick}>{o}</button>
+              <button key={o} className={outcome === o ? "on" : ""} onClick={() => setOutcome(o)} autoFocus={o === "goal" && quick}>{o}</button>
             ))}
           </div>
         </label>

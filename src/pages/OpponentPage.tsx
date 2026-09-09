@@ -30,14 +30,14 @@ export default function OpponentPage() {
       <h1>vs {name}</h1>
       <p className="muted small">{games.length} game{games.length === 1 ? "" : "s"} · {record.w}W {record.d}D {record.l}L · GF {record.gf} GA {record.ga}</p>
       {shots.some((s) => s.pitch_x != null) ? (
-        <div className="card"><h3>All shots across these games</h3><PitchMap shots={shots} /><div className="tiny muted">We attack →, they attack ←. Gold ring = goal. Look for patterns: where do they hurt us, where do we get chances.</div></div>
+        <div className="card"><h3>All shots across these games</h3><div className="pitch-wrap"><PitchMap shots={shots} /></div><div className="tiny muted">We attack →, they attack ←. Gold ring = goal. Look for patterns: where do they hurt us, where do we get chances.</div></div>
       ) : null}
       {games.map((g) => {
         const v = mainVideo(g.videos);
         const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), data.shots.filter((x) => x.game_id === g.id), data.teamStats.filter((x) => x.game_id === g.id));
         return (
-          <div key={g.id} className="card row" style={{ alignItems: "flex-start" }}>
-            {v ? <img src={thumbnailUrl(v.youtube_id)} alt="" style={{ width: 140, borderRadius: 6 }} /> : null}
+          <div key={g.id} className="card row opp-card" style={{ alignItems: "flex-start" }}>
+            {v ? <img className="thumb-sm" src={thumbnailUrl(v.youtube_id, "hq")} alt="" /> : null}
             <div style={{ flex: 1, minWidth: 200 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <strong>{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}</strong>
