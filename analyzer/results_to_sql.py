@@ -32,12 +32,16 @@ for b in r["buckets"]:
 from analyzer.xg import compute_xg, MODEL_VERSION
 L, W = float(r.get("pitch_length_m") or 105), float(r.get("pitch_width_m") or 68)
 
-# Shot candidates (geometry-backed) become machine shot tags with a machine-located shot row.
+from analyzer.db import machine_tag_rows
+# Shot candidates become machine tags (shot, plus save / goal proposals from the outcome) and,
+# when geometry located them, a machine-located shot row.
 shots_ = sorted(r.get("shot_candidates", []), key=lambda c: c["t"])
 for c in shots_:
     tid = str(uuid.uuid4())
-    out.append(f"insert into tags (id, game_id, video_id, t_seconds, type, team, label, source, confidence) values "
-               f"('{tid}', '{game_id}', '{video_id}', {round(c['t'], 1)}, 'shot', {team(c.get('team'))}, 'machine shot candidate', 'machine', {round(c['confidence'], 3)});")
+    for row in machine_tag_rows(c, "machine shot candidate"):
+        rid = tid if row["type"] == "shot" else str(uuid.uuid4())
+        out.append(f"insert into tags (id, game_id, video_id, t_seconds, type, team, label, source, confidence) values "
+                   f"('{rid}', '{game_id}', '{video_id}', {row['t_seconds']}, '{row['type']}', {team(row['team'])}, '{row['label']}', 'machine', {row['confidence']});")
     loc = c.get("location")
     if loc:
         xg = compute_xg(loc["x"], loc["y"], L, W)

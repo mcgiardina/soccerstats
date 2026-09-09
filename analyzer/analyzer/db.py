@@ -51,6 +51,28 @@ def get_team_choice(game_id):
     return (rows[0]["params"] or {}).get("us_cluster") if rows else None
 
 
+def other(team):
+    return None if team is None else ("them" if team == "us" else "us")
+
+
+def machine_tag_rows(s, label):
+    """One shot candidate can become up to two tags: the shot itself and, when the ball ended
+    on the keeper, a 'save' for the defending team; a ball that carried past the keeper is
+    proposed as a goal with the shot. All proposals; a human confirms."""
+    t = round(float(s["t"]), 1)
+    conf = round(float(s["confidence"]), 3)
+    out = s.get("outcome", "shot")
+    rows = []
+    if out == "goal?":
+        rows.append({"t_seconds": t, "type": "goal", "team": s.get("team"), "confidence": round(conf * 0.8, 3),
+                     "label": "machine goal candidate (ball carried past keeper)"})
+    rows.append({"t_seconds": t, "type": "shot", "team": s.get("team"), "confidence": conf, "label": label})
+    if out == "save":
+        rows.append({"t_seconds": t, "type": "save", "team": other(s.get("team")), "confidence": conf,
+                     "label": "machine save candidate"})
+    return rows
+
+
 def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, shot_locations, snapshots, pitch, kick_tags=()):
     c = client()
     # Replace prior machine stats for this game; human_adjusted rows are untouched.
@@ -71,9 +93,8 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
         # Don't propose a shot within 4 s of one a human already tagged.
         if any(abs(s["t"] - t) < 4 for t in taken):
             continue
-        rows.append({"game_id": game_id, "video_id": video_id, "t_seconds": round(s["t"], 1), "type": "shot",
-                     "team": s.get("team"), "source": "machine", "confidence": round(float(s["confidence"]), 3),
-                     "label": label})
+        for r in machine_tag_rows(s, label):
+            rows.append({"game_id": game_id, "video_id": video_id, "source": "machine", **r})
     inserted = c.table("tags").insert(rows).select().execute().data if rows else []
     # Machine locations go on the shots table as proposals, marked 'machine'.
     from analyzer.xg import compute_xg, MODEL_VERSION

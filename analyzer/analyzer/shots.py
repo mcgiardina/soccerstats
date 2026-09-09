@@ -160,6 +160,18 @@ def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, max_range_h=22.0, end
             rest.append(c); continue
         closeness = 1.0 - min(1.0, d_end / (end_within_h * kh))
         conf = round(min(0.95, 0.45 + 0.25 * closeness + 0.25 * max(0.0, cos - min_cos) / (1 - min_cos)), 3)
-        shots.append({**c, "confidence": conf, "keeper_range_h": round(dist0 / kh, 1), "keeper_cos": round(cos, 2), "keeper_end_h": round(d_end / kh, 1)})
+        # Outcome, all as proposals:
+        #  - the ball ends on the keeper (< ~1 keeper-height): probably a save / collection
+        #  - the ball carries on well past the keeper's line: possibly a goal (or wide)
+        #  - otherwise a shot of unknown outcome
+        beyond = along_end > along_k + 1.5 * kh
+        if d_end <= 1.0 * kh:
+            outcome = "save"
+        elif beyond:
+            outcome = "goal?"
+        else:
+            outcome = "shot"
+        shots.append({**c, "confidence": conf, "outcome": outcome, "keeper_range_h": round(dist0 / kh, 1),
+                      "keeper_cos": round(cos, 2), "keeper_end_h": round(d_end / kh, 1)})
     print(f"{len(shots)} shot candidates via keeper approach, {len(rest)} kicks remain")
     return shots, rest
