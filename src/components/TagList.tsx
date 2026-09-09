@@ -46,8 +46,8 @@ export default function TagList(p: Props) {
 
   return (
     <div>
-      <div className="row" style={{ marginBottom: ".5rem", justifyContent: "space-between" }}>
-        <div className="seg light" style={{ flexWrap: "wrap" }}>
+      <div className="tag-filters">
+        <div className="seg light">
           {FILTERS.map((x) => (
             <button key={x.key} className={filter === x.key ? "on" : ""} onClick={() => setFilter(x.key)}>{x.label}</button>
           ))}
@@ -65,8 +65,8 @@ export default function TagList(p: Props) {
         return (
           <div key={t.id} className={`tag-row ${unreviewed ? "machine" : ""} ${activeId === t.id ? "active" : ""}`}>
             <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds))} title="Jump">{mt.label}</span>
-            <span className={`badge ${t.team ?? ""}`}>{t.team ?? "—"}</span>
             <span className="lbl">
+              <span className={`badge ${t.team ?? ""}`}>{t.team ?? "—"}</span>
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
               {t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
               {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}

@@ -226,18 +226,24 @@ textarea { min-height: 84px; resize: vertical; }
 .timeline .marker.machine { border-style: dashed; border-color: var(--machine); }
 .timeline .playhead { position: absolute; top: 22px; width: 2px; height: 20px; background: var(--ink); border-radius: 1px; transform: translateX(-50%); pointer-events: none; }
 
-/* tag rows */
-.tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; padding: .5rem .25rem; border-bottom: 1px solid var(--line); border-radius: 10px; }
+/* tag rows: time | content | actions. Content wraps; actions form a compact icon block. */
+.tag-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: .6rem; row-gap: .2rem; align-items: start; padding: .55rem .3rem; border-bottom: 1px solid var(--line); border-radius: 10px; }
 .tag-row:last-child { border-bottom: none; }
-.tag-row .t { min-width: 64px; font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer; color: var(--primary); white-space: nowrap; font-family: var(--display); }
-.tag-row .lbl { flex: 1 1 160px; min-width: 0; line-height: 1.3; font-size: .9rem; }
-.tag-row .actions { display: flex; gap: .2rem; flex-shrink: 0; margin-left: auto; }
-.tag-row .actions .btn.sm { padding: .15rem .45rem; line-height: 1.2; box-shadow: none; }
+.tag-row .t { font-variant-numeric: tabular-nums; font-weight: 700; cursor: pointer; color: var(--primary); white-space: nowrap; font-family: var(--display); padding-top: .15rem; }
+.tag-row .lbl { min-width: 0; line-height: 1.35; font-size: .9rem; }
+.tag-row .lbl .badge { vertical-align: middle; margin-right: .35rem; }
+.tag-row .lbl .badge.machine { margin-left: .35rem; }
+.tag-row .actions { display: grid; grid-template-columns: repeat(3, auto); gap: .2rem; justify-content: end; }
+.tag-row .actions .btn.sm { padding: .15rem .45rem; line-height: 1.2; box-shadow: none; min-width: 30px; justify-content: center; }
 .tag-row.machine { background: #fffaf0; }
 .tag-row.active { background: #eefaf6; }
-/* only push actions to their own line when there are several of them (admin) */
-.game-side .tag-row:has(.actions > :nth-child(3)) .actions { flex-basis: 100%; justify-content: flex-end; }
-.game-side .tag-row .badge.machine { margin-left: 0 !important; }
+.tag-row.small { display: flex; flex-wrap: wrap; gap: .4rem; }   /* admin run list etc. */
+
+/* filter strip in the rail: never wrap the segmented control; let it scroll instead */
+.tag-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+.tag-filters .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.tag-filters .seg::-webkit-scrollbar { display: none; }
+.tag-filters .seg > button { padding: .3rem .62rem; font-size: .78rem; white-space: nowrap; }
 
 /* modal */
 .modal-bg { position: fixed; inset: 0; background: rgba(23, 32, 58, .45); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
