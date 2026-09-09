@@ -62,7 +62,7 @@ def _plausible(H, src, dst, feet):
     return True, float(conf), "ok"
 
 
-def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5):
+def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5, device="mps"):
     """Returns {t: (H, confidence)} for frames whose homography passes the plausibility gate.
     dets_by_t (optional): {round(t,1): FrameDet} so player feet can be used as the on-pitch check."""
     import cv2
@@ -71,7 +71,7 @@ def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5):
     out = {}
     rejected = {}
     for f in frames:
-        r = model(f.img, verbose=False, imgsz=1280, conf=0.3)[0]
+        r = model(f.img, verbose=False, imgsz=1280, conf=0.3, device=device)[0]
         if r.keypoints is None or len(r.keypoints) == 0 or r.keypoints.conf is None:
             continue
         kp = r.keypoints.xy[0].cpu().numpy()
