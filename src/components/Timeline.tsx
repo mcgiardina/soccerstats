@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import type { Tag, Video } from "../lib/types";
-import { fmtClock } from "../lib/time";
+import { fmtClock, seekTime } from "../lib/time";
 
 interface Props {
   video: Video;
@@ -51,7 +51,7 @@ export default function Timeline({ video, duration, current, tags, onSeek, activ
           className={`marker ${t.team ?? "none"} ${t.type === "goal" ? "goal" : ""} ${t.source === "machine" && !t.confirmed ? "machine" : ""}`}
           style={{ left: pct(t.t_seconds), outline: activeTagId === t.id ? "2px solid #111" : undefined }}
           title={`${fmtClock(t.t_seconds)} ${t.type}${t.team ? " · " + t.team : ""}`}
-          onPointerDown={(e) => { e.stopPropagation(); onSeek(Math.max(0, t.t_seconds - 3)); }}
+          onPointerDown={(e) => { e.stopPropagation(); onSeek(seekTime(t.t_seconds)); }}
         />
       ))}
       <div className="playhead" style={{ left: pct(current) }} />

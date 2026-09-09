@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Shot, Tag, Video } from "../lib/types";
 import { TAG_LABELS, SET_PIECE_TYPES } from "../lib/types";
-import { toMatchTime } from "../lib/time";
+import { seekTime, toMatchTime } from "../lib/time";
 import { shareUrl, copyText } from "../lib/links";
 
 interface Props {
@@ -40,7 +40,7 @@ export default function TagList(p: Props) {
   const activeId = [...list].reverse().find((t) => t.t_seconds <= p.currentTime + 0.5)?.id ?? null;
 
   async function copyLink(t: Tag) {
-    const ok = await copyText(shareUrl(p.gameId, Math.max(0, t.t_seconds - 3)));
+    const ok = await copyText(shareUrl(p.gameId, seekTime(t.t_seconds)));
     p.onToast?.(ok ? "Link copied" : "Copy failed");
   }
 
@@ -64,7 +64,7 @@ export default function TagList(p: Props) {
         const unreviewed = machine && t.confirmed == null;
         return (
           <div key={t.id} className={`tag-row ${unreviewed ? "machine" : ""} ${activeId === t.id ? "active" : ""}`}>
-            <span className="t" onClick={() => p.onSeek(Math.max(0, t.t_seconds - 3))} title="Jump">{mt.label}</span>
+            <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds))} title="Jump">{mt.label}</span>
             <span className={`badge ${t.team ?? ""}`}>{t.team ?? "—"}</span>
             <span className="lbl">
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>

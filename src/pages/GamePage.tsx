@@ -20,7 +20,7 @@ import { CONFIG } from "../config";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
-import { fmtDate, toMatchTime } from "../lib/time";
+import { fmtDate, seekTime, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
 import { fetchOEmbed, parseYouTubeId, watchUrl } from "../lib/youtube";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
@@ -289,7 +289,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
             <h2 style={{ margin: 0 }}>Shot map</h2>
             {admin && b.shots.length ? <button className="btn sm" onClick={recomputeXg} title="Recompute after changing pitch size">↻ xG</button> : null}
           </div>
-          <PitchMap shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(Math.max(0, t.t_seconds - 3)); }} />
+          <PitchMap shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
           <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. We attack →.</div>
         </div>
 

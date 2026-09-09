@@ -1,4 +1,10 @@
 import type { Video } from "./types";
+import { CONFIG } from "../config";
+
+/** Where playback should start for a tag: a little before the moment itself. */
+export function seekTime(tagSeconds: number): number {
+  return Math.max(0, tagSeconds - CONFIG.leadInSeconds);
+}
 
 // Video seconds -> "m:ss" or "h:mm:ss" (YouTube chapter format).
 export function fmtClock(total: number): string {
