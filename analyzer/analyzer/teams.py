@@ -27,7 +27,7 @@ def torso_color(img, box):
         return None
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).reshape(-1, 3)
     lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB).reshape(-1, 3).astype(np.float32)
-    grass = (hsv[:, 0] > 30) & (hsv[:, 0] < 95) & (hsv[:, 1] > 50)
+    grass = is_field_pixel(hsv, field_colour(img))
     dark = hsv[:, 2] < 45
     keep = ~grass & ~dark
     if keep.sum() < 8:
@@ -35,9 +35,37 @@ def torso_color(img, box):
     return np.median(lab[keep], axis=0)
 
 
-def on_grass(img, box, min_green=0.45):
-    """True when the strip just below the box is mostly grass: a player on the pitch, not a
-    spectator under a tent or someone behind the fence."""
+_FIELD_CACHE = {}
+
+
+def field_colour(img):
+    """Median HSV of the playing surface, measured from the lower-middle of the frame where the
+    pitch nearly always is. Handles green turf, yellowed grass and artificial surfaces alike."""
+    key = id(img)
+    hit = _FIELD_CACHE.get(key)
+    if hit is not None and hit[0] is img:
+        return hit[1]
+    h, w = img.shape[:2]
+    patch = img[int(h * 0.55):int(h * 0.9):4, int(w * 0.3):int(w * 0.7):4]
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    med = tuple(int(v) for v in np.median(hsv, axis=0))
+    if len(_FIELD_CACHE) > 8:
+        _FIELD_CACHE.clear()
+    _FIELD_CACHE[key] = (img, med)
+    return med
+
+
+def is_field_pixel(hsv, field):
+    fh, fs, _ = field
+    dh = np.abs(hsv[:, 0].astype(int) - fh)
+    dh = np.minimum(dh, 180 - dh)
+    return (dh <= 14) & (hsv[:, 1] >= max(25, 0.4 * fs)) & (hsv[:, 2] > 40)
+
+
+def on_grass(img, box, min_field=0.45):
+    """True when the strip just below the box is mostly playing surface: a player on the pitch,
+    not a spectator under a tent or someone behind the fence. Surface colour is measured
+    from the frame itself, so dry yellow grass and artificial turf work too."""
     x1, y1, x2, y2 = [int(v) for v in box[:4]]
     h, w = img.shape[:2]
     cx = (x1 + x2) // 2
@@ -45,8 +73,7 @@ def on_grass(img, box, min_green=0.45):
     if strip.size == 0:
         return False
     hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV).reshape(-1, 3)
-    green = (hsv[:, 0] > 30) & (hsv[:, 0] < 95) & (hsv[:, 1] > 40) & (hsv[:, 2] > 40)
-    return green.mean() >= min_green
+    return is_field_pixel(hsv, field_colour(img)).mean() >= min_field
 
 
 def _feat(c):
