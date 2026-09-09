@@ -9,6 +9,13 @@ from sklearn.cluster import KMeans
 
 from analyzer import db
 
+# Shirt sampling. Measured 2026-09-09: relaxing these (wider crop, DARK_V 28-35, MIN_KEEP 4-6) turned
+# "unlabelled" into "wrong" for shaded dark kits (blue players read as white from skin/shorts pixels).
+SMALL_WIDE = False  # widen the shirt crop horizontally for small boxes
+DARK_V = 45         # HSV value below which a pixel is treated as shadow/black and ignored
+MIN_KEEP = 8        # minimum usable shirt pixels
+MERGE_DIST = 30.0   # feature-space distance below which two colour clusters are the same kit
+
 NEUTRAL_CHROMA = 9.0      # below this normalised chroma a cluster is white/grey/black
 HUE_GAP_DEG = 30.0        # chromatic clusters within this hue angle are the same kit
 NEUTRAL_LIGHT_GAP = 12.0  # neutral clusters closer than this in damped lightness are the same kit
