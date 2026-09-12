@@ -116,7 +116,8 @@ automatically. This is what unlocks referee/keeper exclusion by class, real shot
    net" and "soccer ball", built into `goal-ball-world.pt` by `get_weights.sh`) tracks the goal
    through the camera pan and supplies the ball track inside the window; `goalposts.py`
    (crossbar + posts, classic CV) is the fallback when the world model is unavailable.
-   Outcomes: on_target / off_target / save / goal? / cross. Keeper-approach test as last resort.
+   Outcomes: on_target / off_target / save / goal? / cross. The older keeper-approach test is off by
+   default (its proposals did not survive review); `ANALYZER_KEEPER_FALLBACK=1` re-enables it.
 7. `homography.py` pitch keypoints → homography (only if `PITCH_WEIGHTS` set). Feeds machine shot
    locations and `shape_snapshots`. Prefers a `wide_fixed` video when the game has one.
 7b. `dewarp.py` fisheye de-warp for a raw wide-angle source such as the BallerCam 4K fisheye,

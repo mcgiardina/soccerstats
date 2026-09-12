@@ -236,8 +236,13 @@ def main() -> int:
             g["source"] = "goal_mouth"
         print(f"goal-mouth: {len(geo_shots)} shots ({collections.Counter(g['outcome'] for g in geo_shots)}), {len(geo_unresolved)} unresolved shots, "
               f"{len(crosses)} crosses, {len(trusted_kicks)} kicks ruled out, {len(rest)} without a goal in view")
-        # keeper-approach fallback only for kicks where the goal was not in view
-        more, kick_cands = shots.classify_by_keeper([{k: v for k, v in g.items() if k not in ('outcome',)} for g in rest], dets, fps=args.fps)
+        # Keeper-approach fallback for kicks where the goal was not in view. Off by default: on review
+        # its proposals were wrong two out of two (0:07 and 8:59 on the Dynamo game), and a window
+        # without the goal in view cannot be checked by anything else. ANALYZER_KEEPER_FALLBACK=1 re-enables.
+        if os.environ.get("ANALYZER_KEEPER_FALLBACK") == "1":
+            more, kick_cands = shots.classify_by_keeper([{k: v for k, v in g.items() if k not in ('outcome',)} for g in rest], dets, fps=args.fps)
+        else:
+            more, kick_cands = [], [{k: v for k, v in g.items() if k != 'outcome'} for g in rest]
         for m in more:
             m["source"] = "keeper"
         shot_cands = sorted(shot_cands + geo_shots + geo_unresolved + more, key=lambda c: c["t"])
