@@ -61,8 +61,9 @@ class GoalFinder:
         if getattr(self, "_last", None) is not None and self._last[0] is img:
             return self._last[1]
         goals, balls = self._predict(img, self.imgsz)
-        if not balls and self.ball_imgsz and self.ball_imgsz != self.imgsz:
-            balls = self._predict(img, self.ball_imgsz)[1]
+        if self.ball_imgsz and self.ball_imgsz != self.imgsz:
+            # the ball in a crowded box at the far end is a few pixels: always add the high-res pass
+            balls = balls + self._predict(img, self.ball_imgsz)[1]
         self._last = (img, (goals, balls))
         return goals, balls
 
