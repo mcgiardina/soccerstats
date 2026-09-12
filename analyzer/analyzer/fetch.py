@@ -40,8 +40,14 @@ def download(youtube_id: str, max_height: int = 720) -> str:
     # Some uploads only answer to specific player clients (seen: a BallerCam upload that was
     # "not available" to the default client but served 360p via android). Try in order.
     attempts = [[], ["--extractor-args", "youtube:player_client=android"], ["--extractor-args", "youtube:player_client=ios"]]
+    # a stale yt-dlp is the usual reason for a 360p-only result: refresh it once, then retry the clients
+    attempts = attempts + ["upgrade"] + attempts
     last = None
     for extra in attempts:
+        if extra == "upgrade":
+            print("refreshing yt-dlp before retrying")
+            subprocess.call([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "yt-dlp"])
+            continue
         cmd = [sys.executable, "-m", "yt_dlp", "-f", fmt, "--no-playlist", "-o", out, *extra, url]
         r = subprocess.run(cmd)
         if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 1_000_000:
