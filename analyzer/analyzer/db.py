@@ -77,9 +77,11 @@ def update_run_params(run_id, extra):
 def get_team_choice(game_id):
     """Persisted 'which cluster is us' answer lives in the run params of the last done run."""
     rows = client().table("stat_runs").select("params").eq("game_id", game_id).eq("status", "done").order("finished_at", desc=True).limit(1).execute().data
-    v = (rows[0]["params"] or {}).get("us_cluster") if rows else None
-    # stored as the letter shown in the preview ("A"/"B"); the analyzer works with 0/1
-    return {"A": 0, "B": 1, 0: 0, 1: 1}.get(v)
+    p = (rows[0]["params"] or {}) if rows else {}
+    # Cluster letters are not stable between runs (a 360p and a 720p run of the same game put
+    # the same kit in A then B), so the remembered choice is the shirt colour of "us", and the
+    # letter is only a fallback for runs made before that was stored.
+    return {"letter": {"A": 0, "B": 1, 0: 0, 1: 1}.get(p.get("us_cluster")), "bgr": p.get("us_kit_bgr")}
 
 
 def other(team):

@@ -160,6 +160,7 @@ def main() -> int:
 
         if assign is not None and getattr(teams.assign, "us_cluster", None) is not None:
             choice = {"us_cluster": "AB"[teams.assign.us_cluster], "team_pick": getattr(teams.assign, "method", None),
+                      "us_kit_bgr": getattr(teams.assign, "us_kit_bgr", None),
                       "kits": getattr(teams.assign, "kits", None),
                       "ball_frames": sum(1 for d in dets if d.ball), "attributed_frames": sum(1 for d in dets if any(d.labels or []))}
             params.update(choice)

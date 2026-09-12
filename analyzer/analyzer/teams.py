@@ -214,21 +214,30 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     assign.kits = [{"cluster": "AB"[k], "bgr": [int(v) for v in np.median(raw_all[labels == k], axis=0)], "samples": int((labels == k).sum())} for k in (0, 1)]
     assign.kits.append({"separation": round(float(ratio), 2), "samples_total": int(len(feats))})
     assign.method = "flag" if us_cluster is not None else None
+    kits = [np.median(raw_all[labels == k], axis=0) for k in (0, 1)]
     if us_cluster is None and not force_confirm:
-        us_cluster = db.get_team_choice(game_id)
-        assign.method = "remembered" if us_cluster is not None else None
-    if us_cluster is None:
-        # unattended (the Mac mini worker): match the two kits to the colour set on the game
+        # 1) the kit colour set on the game (or the team colour): decided by shirt colour
         kit = db.get_kit_color(game_id)
-        kits = [np.median(raw_all[labels == k], axis=0) for k in (0, 1)]
         pick = _pick_by_colour(kits, kit) if kit else None
         if pick is not None:
             us_cluster = pick
             assign.method = f"kit colour {kit}"
             print(f"us = cluster {'AB'[pick]} (closest to kit colour {kit})")
+    if us_cluster is None and not force_confirm:
+        # 2) what an earlier run of this game decided, matched by the shirt colour it recorded
+        prev = db.get_team_choice(game_id)
+        if prev.get("bgr"):
+            d = [float(np.linalg.norm(k - np.array(prev["bgr"], dtype=float))) for k in kits]
+            us_cluster = int(np.argmin(d))
+            assign.method = "remembered kit colour"
+            print(f"us = cluster {'AB'[us_cluster]} (nearest the remembered shirt colour {prev['bgr']})")
+        elif prev.get("letter") is not None:
+            us_cluster = prev["letter"]
+            assign.method = "remembered letter (unreliable across runs)"
     if us_cluster is None:
         us_cluster = _confirm()
         assign.method = assign.method or ("confirmed" if sys.stdin.isatty() else "assumed A")
+    assign.us_kit_bgr = [int(v) for v in kits[us_cluster]]
     # persisted into this run's params by the caller (get_team_choice reads it back next time)
     assign.us_cluster = us_cluster
 
