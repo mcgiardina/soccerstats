@@ -12,8 +12,20 @@ mkdir -p .venv ../node_modules ../dist cache
 for d in .venv ../node_modules ../dist cache; do xattr -w com.dropbox.ignored 1 "$d"; done
 
 echo "2/5  Python environment"
-PY=$(command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3)
+PY=$(command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3.10 || true)
+if [ -z "$PY" ]; then
+  echo "     -> Python 3.10+ is required (yt-dlp dropped 3.9, and the system Python 3.9 then only gets 360p video)."
+  echo "        Install it with:  brew install python@3.13   then re-run this script."
+  exit 1
+fi
+if [ -x .venv/bin/python ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+  echo "     -> existing .venv uses $(.venv/bin/python --version); rebuilding it with $PY"
+  rm -rf .venv
+fi
 if [ ! -x .venv/bin/python ]; then "$PY" -m venv .venv; fi
+echo "     using $("$PY" --version)"
+# yt-dlp prefers a JavaScript runtime for YouTube; Deno is small and the one it enables by default
+if command -v brew >/dev/null && ! command -v deno >/dev/null; then brew install -q deno || true; fi
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -r requirements.txt gdown
 .venv/bin/pip install -q --upgrade yt-dlp   # a stale yt-dlp falls back to 360p streams

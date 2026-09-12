@@ -72,6 +72,9 @@ Never runs automatically. The web app's "Queue analysis run" button only inserts
 A Mac mini in the garage can do all of this so your laptop never has to. It only ever
 processes runs a human queued from the app's **Analysis** tab, so nothing starts on its own.
 
+The mini needs Python 3.10 or newer (`brew install python@3.13`): yt-dlp has dropped 3.9, and an
+old yt-dlp on the system Python 3.9 silently gets a 640x360 stream, which ruins ball detection and
+kit colours (seen 2026-09-09; the worker now refuses anything under 720p instead).
 If the mini shares this Dropbox folder, it already has the code. On the mini, open a
 terminal in this `analyzer` folder and run `./setup_mini.sh` twice: the first pass creates
 `~/.config/matchfilm/.env` for you to paste the Supabase service key into (outside Dropbox,
