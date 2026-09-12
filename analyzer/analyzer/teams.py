@@ -317,12 +317,18 @@ def _pick_by_colour(kits_lab, kit_hex):
         def hue_d(a, b):
             d = abs(a - b) % 180
             return min(d, 180 - d) / 90.0
-        # a neutral kit can never be the coloured target
-        scores = [hue_d(k[0], t_hsv[0]) + (1.0 if k[1] < 50 else 0.0) for k in k_hsv]
+        # Shade and white trim wash a coloured shirt toward grey in the median, so a neutral
+        # kit is "unknown" (0.5) rather than ruled out; a saturated kit of another hue is ruled out.
+        scores = [hue_d(k[0], t_hsv[0]) if k[1] >= 50 else 0.5 for k in k_hsv]
     best = int(np.argmin(scores))
-    # the named colour must actually be on the pitch: a neutral target needs a pale/dark kit,
-    # a coloured target needs a kit within ~40 degrees of hue; otherwise the setting is wrong
-    plausible = (k_hsv[best][1] < 90) if t_hsv[1] < 60 else (scores[best] < 0.45)
+    other = 1 - best
+    # the named colour must actually be on the pitch: a neutral target needs a pale/dark kit; a
+    # coloured target needs either a kit of that hue, or a kit that is clearly some other colour
+    # so the remaining one must be ours
+    if t_hsv[1] < 60:
+        plausible = k_hsv[best][1] < 90
+    else:
+        plausible = scores[best] < 0.45 or (k_hsv[other][1] >= 50 and scores[other] > 0.6)
     if not plausible or abs(scores[0] - scores[1]) < 0.05:
         print(f"kit colour {kit_hex} does not match either kit (scores {[round(x, 2) for x in scores]}); not deciding by colour")
         return None
