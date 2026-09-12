@@ -36,7 +36,7 @@ function Chart({ title, data, a, b, aName, bName, unit }: { title: string; data:
       {!has ? <p className="small muted">No data yet.</p> : (
         <ResponsiveContainer width="100%" height={180}>
           <LineChart data={data} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-            <CartesianGrid stroke="#eee" vertical={false} />
+            <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" tickFormatter={(v: string) => v.split(" ").slice(0, 2).join(" ")} />
             <YAxis tick={{ fontSize: 10 }} unit={unit} allowDecimals={a.startsWith("xg")} />
             <Tooltip contentStyle={{ fontSize: 12 }} />

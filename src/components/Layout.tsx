@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { CONFIG } from "../config";
 import { useAuth } from "../lib/auth";
 import { useTeam } from "../lib/team";
+import { ThemeToggle } from "../lib/theme";
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { isAdmin, logout } = useAuth();
@@ -18,6 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {team.isCoach && !isAdmin ? <Link to="/coach" className="pill">coach</Link> : null}
         <span className="spacer" />
         <div className="nav-actions">
+          <ThemeToggle />
           {isAdmin ? (
             <>
               <Link to="/games/new" className="btn sm primary">+ Game</Link>

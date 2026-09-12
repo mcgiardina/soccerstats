@@ -71,9 +71,9 @@ export function TeamProvider({ children, isAdmin }: { children: ReactNode; isAdm
   // brand colours apply live
   useEffect(() => {
     const r = document.documentElement.style;
-    r.setProperty("--primary", team.primary_color || CONFIG.colors.primary);
-    r.setProperty("--us", team.primary_color || CONFIG.colors.primary);
-    r.setProperty("--accent", team.accent_color || CONFIG.colors.accent);
+    // the stylesheet derives --primary / --us / --accent (and their dark-mode variants) from these
+    r.setProperty("--team-primary", team.primary_color || CONFIG.colors.primary);
+    r.setProperty("--team-accent", team.accent_color || CONFIG.colors.accent);
     document.title = team.team_name ? `${CONFIG.appName} · ${team.team_name}` : CONFIG.appName;
   }, [team]);
 

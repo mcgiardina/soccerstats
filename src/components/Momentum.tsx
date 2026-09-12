@@ -9,7 +9,7 @@ export default function Momentum({ buckets, names }: { buckets: StatBucket[]; na
       <div className="momentum">
         {buckets.map((b) => {
           const p = b.possession_us_pct;
-          if (p == null || !b.ball_frames) return <div key={b.id} className="b" style={{ height: 2, background: "#ddd" }} title="no data" />;
+          if (p == null || !b.ball_frames) return <div key={b.id} className="b" style={{ height: 2, background: "var(--line-strong)" }} title="no data" />;
           const us = p >= 50;
           const h = Math.max(4, Math.abs(p - 50) / 50 * 48);
           return <div key={b.id} className={`b ${us ? "" : "them"}`} style={{ height: h }} title={`${fmtClock(b.bucket_start_s)}–${fmtClock(b.bucket_end_s)}: ${Math.round(p)}% ${names?.us ?? "us"} (${b.ball_frames} ball frames)`} />;
