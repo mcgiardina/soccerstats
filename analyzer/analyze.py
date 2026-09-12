@@ -44,7 +44,15 @@ def run_queue(poll_seconds: int, backend: str) -> int:
     import subprocess
     print(f"watching for queued runs every {poll_seconds}s (backend={backend})")
     last_update = 0.0
+    here = os.path.dirname(os.path.abspath(__file__))
+    watched = [os.path.abspath(__file__)] + [os.path.join(here, "analyzer", f) for f in os.listdir(os.path.join(here, "analyzer")) if f.endswith(".py")]
+    stamp = lambda: max(os.path.getmtime(f) for f in watched if os.path.exists(f))
+    started_stamp = stamp()
     while True:
+        # The code arrives through Dropbox. When it changes, exit and let launchd (KeepAlive)
+        # restart the worker on the new code instead of running yesterday's loop forever.
+        if stamp() != started_stamp:
+            print("analyzer code changed on disk; restarting the worker"); return 0
         # YouTube changes often; a stale yt-dlp silently falls back to a 360p stream (seen on the
         # mini: 640x360 while the laptop got 1280x720). Refresh it once a day.
         if time.time() - last_update > 86400:
@@ -65,8 +73,9 @@ def run_queue(poll_seconds: int, backend: str) -> int:
             print(f"--- finished with code {rc}")
             if rc != 0:
                 # Don't spin on a broken run: mark it failed so the queue moves on. The app shows the status.
+                # The run usually recorded its own traceback already; only fill in when it did not.
                 try:
-                    db.fail_queued(q[0]["id"], f"worker exit code {rc}; see the worker log")
+                    db.fail_queued(q[0]["id"], f"worker exit code {rc}; see the worker log", keep_existing=True)
                 except Exception as e:  # noqa: BLE001
                     print("could not mark run failed:", str(e)[:120])
                 time.sleep(15)
@@ -260,7 +269,12 @@ def main() -> int:
         if not args.dry_run:
             # the worker's log lives on the other machine: keep the tail of the traceback with the run
             tb = traceback.format_exc().strip().splitlines()
-            db.finish_run(run["id"], "failed", error=(f"{type(e).__name__}: {e} | " + " | ".join(tb[-4:-1]))[:1500])
+            detail = (f"{type(e).__name__}: {e} | " + " | ".join(tb[-4:-1]))[:1500]
+            db.finish_run(run["id"], "failed", error=detail)
+            try:
+                db.update_run_params(run["id"], {"error_detail": detail})   # survives the worker's own status update
+            except Exception:  # noqa: BLE001
+                pass
         return 1
     finally:
         time.sleep(0.1)

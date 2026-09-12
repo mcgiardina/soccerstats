@@ -178,5 +178,9 @@ def write_results(*, game_id, run_id, video_id, team_stats, buckets, shot_tags, 
             c.table("shape_snapshots").insert([{**s, "game_id": game_id, "run_id": run_id} for s in snapshots[i:i + 200]]).execute()
 
 
-def fail_queued(run_id, error):
-    client().table("stat_runs").update({"status": "failed", "finished_at": now(), "error": str(error)[:500]}).eq("id", run_id).execute()
+def fail_queued(run_id, error, keep_existing=False):
+    if keep_existing:
+        rows = client().table("stat_runs").select("status,error").eq("id", run_id).limit(1).execute().data
+        if rows and rows[0].get("status") == "failed" and rows[0].get("error"):
+            return
+    client().table("stat_runs").update({"status": "failed", "finished_at": now(), "error": str(error)[:1500]}).eq("id", run_id).execute()
