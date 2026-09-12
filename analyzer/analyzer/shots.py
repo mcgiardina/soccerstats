@@ -111,6 +111,43 @@ def classify(cands, dets, H, window_s=1.0, min_conf=0.4):
     return shots, kicks
 
 
+def approach_candidates(dets, fps=5.0, sequence=None, near_h=3.0, far_h=7.0, lookback_s=2.0, min_gap_s=6, existing=()):
+    """Second trigger for shots: the ball arriving fast at a goalkeeper. A strike from 15 m reaches
+    the keeper in about a second, and at 5 fps the ball is often seen in only one or two of those
+    frames, so the speed-jump detector (candidates) misses it; the ball being far from the keeper
+    and then within a few keeper-heights of them within two seconds does not need the frames in
+    between. Emits candidates in the same shape as candidates(); skipped near an existing one."""
+    out, taken = [], sorted(c["t"] + PRE_ROLL for c in existing)
+    last_t = -1e9
+    idx = [i for i, d in enumerate(dets) if d.ball and d.keepers]
+    for i in idx:
+        d = dets[i]
+        for k in d.keepers:
+            kh = max(12.0, k[3] - k[1]); cx, cy = (k[0] + k[2]) / 2, k[3] - 0.5 * kh
+            if np.hypot(d.ball[0] - cx, d.ball[1] - cy) / kh > near_h:
+                continue
+            # was the ball far from this keeper a moment ago?
+            t_far = None
+            j = i - 1
+            while j >= 0 and d.t - dets[j].t <= lookback_s:
+                dj = dets[j]
+                if dj.ball and np.hypot(dj.ball[0] - cx, dj.ball[1] - cy) / kh >= far_h:
+                    t_far = dj.t; break
+                j -= 1
+            if t_far is None:
+                continue
+            t_kick = t_far
+            if t_kick - last_t < min_gap_s or any(abs(t_kick - t) < min_gap_s for t in taken):
+                break
+            team = _holder_before(sequence, t_kick) if sequence else None
+            out.append({"t": max(0.0, t_kick - PRE_ROLL), "confidence": 0.5, "team": team, "trigger": "approach",
+                        "speed_px_s": None, "jump": None, "t_arrive": round(float(d.t), 1)})
+            last_t = t_kick
+            break
+    print(f"{len(out)} keeper-approach candidates")
+    return out
+
+
 def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, max_range_h=22.0, end_within_h=6.0, min_cos=0.75):
     """Fallback when no pitch geometry is available. The keeper's bounding-box height is used
     as a ruler (~1.4 m for a youth keeper), so the test is camera-independent:

@@ -82,7 +82,9 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
         # goal mouth per frame (the camera pans, so the goal moves in the image); a few agreeing
         # frames are required, and the ball is judged in goal-relative coordinates.
         hits = []
-        for d in (win if finder is not None else win[::2]):
+        # approach-triggered windows are numerous; the goal moves slowly, so every 2nd frame is enough there
+        stride = 2 if (finder is None or c.get("trigger") == "approach") else 1
+        for d in win[::stride]:
             if finder is None and not d.keepers:
                 continue
             img = frame_at(d.t)

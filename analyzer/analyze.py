@@ -169,6 +169,8 @@ def main() -> int:
         offsets = video.period_offsets(main_video)
         poss = possession.compute(dets, assign, offsets, fps=args.fps)
         cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])
+        # second trigger: the ball arriving fast at a keeper (catches strikes the sparse ball track hides)
+        cands = sorted(cands + shots.approach_candidates(dets, fps=args.fps, sequence=poss["sequence"], existing=cands), key=lambda c: c["t"])
 
         H = {}
         if homography.available() and frames:
@@ -221,7 +223,8 @@ def main() -> int:
         # goal in view and the ball tracked through the window but never near the goal: a
         # trusted "not a shot", so the weaker keeper-approach test must not override it
         trusted_kicks = [g for g in gres if g["outcome"] == "kick" and g.get("ball_track")]
-        rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track")]
+        # (approach-triggered candidates never take the keeper fallback: it would confirm its own trigger)
+        rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") != "approach"]
         crosses = [g for g in gres if g["outcome"] == "cross"]
         for g in geo_shots:
             g["confidence"] = round(min(0.95, 0.55 + 0.1 * min(3, g.get("goal_hits", 1))), 3)
@@ -236,7 +239,8 @@ def main() -> int:
         for m in more:
             m["source"] = "keeper"
         shot_cands = sorted(shot_cands + geo_shots + geo_unresolved + more, key=lambda c: c["t"])
-        kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses] + [{k: v for k, v in g.items() if k != "ball_track"} for g in trusted_kicks]
+        dropped = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") == "approach"]
+        kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses] + [{k: v for k, v in g.items() if k != "ball_track"} for g in trusted_kicks] + [{**g, "outcome": "kick"} for g in dropped]
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = {round(s["t"], 1): s["location"] for s in shot_cands if s.get("location")}
 
