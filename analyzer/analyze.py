@@ -225,7 +225,9 @@ def main() -> int:
         trusted_kicks = [g for g in gres if g["outcome"] == "kick" and g.get("ball_track")]
         # (approach-triggered candidates never take the keeper fallback: it would confirm its own trigger)
         rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") != "approach"]
-        crosses = [g for g in gres if g["outcome"] == "cross"]
+        # crosses only count when a kick started the window; an approach-triggered window that ends
+        # in "cross" is just the ball passing the keeper and would be review noise
+        crosses = [g for g in gres if g["outcome"] == "cross" and g.get("trigger") != "approach"]
         for g in geo_shots:
             g["confidence"] = round(min(0.95, 0.55 + 0.1 * min(3, g.get("goal_hits", 1))), 3)
             g["source"] = "goal_mouth"
