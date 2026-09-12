@@ -7,11 +7,31 @@ import sys
 CACHE = os.environ.get("ANALYZER_CACHE") or os.path.expanduser("~/Library/Caches/match-film")
 
 
+# A 360p stream makes the ball a 3-pixel blob and the kits a smear; refuse it rather than analyse
+# it (override with ANALYZER_MIN_HEIGHT for a genuinely low-res upload).
+MIN_HEIGHT = int(os.environ.get("ANALYZER_MIN_HEIGHT", "700"))
+
+
+def probe_height(path: str) -> int:
+    try:
+        import cv2
+        cap = cv2.VideoCapture(path)
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        return h
+    except Exception:  # noqa: BLE001
+        return 0
+
+
 def download(youtube_id: str, max_height: int = 720) -> str:
     os.makedirs(CACHE, exist_ok=True)
     out = os.path.join(CACHE, f"{youtube_id}.mp4" if max_height == 720 else f"{youtube_id}_{max_height}p.mp4")
     if os.path.exists(out) and os.path.getsize(out) > 1_000_000:
-        return out
+        h = probe_height(out)
+        if h >= min(MIN_HEIGHT, max_height - 20):
+            return out
+        print(f"cached {youtube_id} is only {h}p; downloading again")
+        os.remove(out)
     # Video-only: no audio needed for analysis and no ffmpeg merge step required.
     fmt = (f"bestvideo[height<={max_height}][ext=mp4][vcodec^=avc1]/bestvideo[height<={max_height}][ext=mp4]"
            f"/best[height<={max_height}][ext=mp4]")
@@ -25,8 +45,12 @@ def download(youtube_id: str, max_height: int = 720) -> str:
         cmd = [sys.executable, "-m", "yt_dlp", "-f", fmt, "--no-playlist", "-o", out, *extra, url]
         r = subprocess.run(cmd)
         if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 1_000_000:
-            if extra:
-                print(f"downloaded via {extra[-1]}; resolution may be limited")
+            h = probe_height(out)
+            if h < min(MIN_HEIGHT, max_height - 20):
+                print(f"got only {h}p{' via ' + extra[-1] if extra else ''}; trying the next client")
+                os.remove(out); last = f"{h}p"
+                continue
             return out
         last = r.returncode
-    raise RuntimeError(f"yt-dlp could not download {youtube_id} (last exit {last}); is the video public or unlisted, and finished processing?")
+    raise RuntimeError(f"yt-dlp could not download {youtube_id} at >= {min(MIN_HEIGHT, max_height - 20)}p (last: {last}). "
+                       f"Update yt-dlp (pip install -U yt-dlp) and check the video is public or unlisted and finished processing.")

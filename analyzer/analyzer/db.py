@@ -77,7 +77,9 @@ def update_run_params(run_id, extra):
 def get_team_choice(game_id):
     """Persisted 'which cluster is us' answer lives in the run params of the last done run."""
     rows = client().table("stat_runs").select("params").eq("game_id", game_id).eq("status", "done").order("finished_at", desc=True).limit(1).execute().data
-    return (rows[0]["params"] or {}).get("us_cluster") if rows else None
+    v = (rows[0]["params"] or {}).get("us_cluster") if rows else None
+    # stored as the letter shown in the preview ("A"/"B"); the analyzer works with 0/1
+    return {"A": 0, "B": 1, 0: 0, 1: 1}.get(v)
 
 
 def other(team):

@@ -43,7 +43,13 @@ def run_queue(poll_seconds: int, backend: str) -> int:
     Needs SUPABASE_SERVICE_KEY. Ctrl-C to stop."""
     import subprocess
     print(f"watching for queued runs every {poll_seconds}s (backend={backend})")
+    last_update = 0.0
     while True:
+        # YouTube changes often; a stale yt-dlp silently falls back to a 360p stream (seen on the
+        # mini: 640x360 while the laptop got 1280x720). Refresh it once a day.
+        if time.time() - last_update > 86400:
+            subprocess.call([sys.executable, "-m", "pip", "install", "-q", "--upgrade", "yt-dlp"])
+            last_update = time.time()
         try:
             q = db.client().table("stat_runs").select("id,game_id,params").eq("status", "queued").order("created_at").limit(1).execute().data
         except Exception as e:  # noqa: BLE001
@@ -252,7 +258,9 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
         if not args.dry_run:
-            db.finish_run(run["id"], "failed", error=str(e)[:500])
+            # the worker's log lives on the other machine: keep the tail of the traceback with the run
+            tb = traceback.format_exc().strip().splitlines()
+            db.finish_run(run["id"], "failed", error=(f"{type(e).__name__}: {e} | " + " | ".join(tb[-4:-1]))[:1500])
         return 1
     finally:
         time.sleep(0.1)

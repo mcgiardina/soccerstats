@@ -16,6 +16,7 @@ PY=$(command -v python3.13 || command -v python3.12 || command -v python3.11 || 
 if [ ! -x .venv/bin/python ]; then "$PY" -m venv .venv; fi
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -r requirements.txt gdown
+.venv/bin/pip install -q --upgrade yt-dlp   # a stale yt-dlp falls back to 360p streams
 
 echo "3/5  Model weights (Roboflow football, ~420 MB, outside Dropbox)"
 ./get_weights.sh >/dev/null
