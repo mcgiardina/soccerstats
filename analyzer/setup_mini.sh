@@ -23,6 +23,7 @@ if [ -x .venv/bin/python ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if s
   rm -rf .venv
 fi
 if [ ! -x .venv/bin/python ]; then "$PY" -m venv .venv; fi
+xattr -w com.dropbox.ignored 1 .venv    # a rebuilt .venv is a new folder: keep it out of Dropbox again
 echo "     using $("$PY" --version)"
 # yt-dlp prefers a JavaScript runtime for YouTube; Deno is small and the one it enables by default
 if command -v brew >/dev/null && ! command -v deno >/dev/null; then brew install -q deno || true; fi
