@@ -211,7 +211,7 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
 
     _write_preview(dets, refs, labels)
     raw_all = np.array(raw_bgr, dtype=float)
-    assign.kits = [{"cluster": "AB"[k], "bgr": [int(v) for v in np.median(raw_all[labels == k], axis=0)], "samples": int((labels == k).sum())} for k in (0, 1)]
+    assign.kits = [{"cluster": "AB"[k], "lab": [int(v) for v in np.median(raw_all[labels == k], axis=0)], "samples": int((labels == k).sum())} for k in (0, 1)]
     assign.kits.append({"separation": round(float(ratio), 2), "samples_total": int(len(feats))})
     assign.method = "flag" if us_cluster is not None else None
     kits = [np.median(raw_all[labels == k], axis=0) for k in (0, 1)]
@@ -226,18 +226,18 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     if us_cluster is None and not force_confirm:
         # 2) what an earlier run of this game decided, matched by the shirt colour it recorded
         prev = db.get_team_choice(game_id)
-        if prev.get("bgr"):
-            d = [float(np.linalg.norm(k - np.array(prev["bgr"], dtype=float))) for k in kits]
+        if prev.get("lab"):
+            d = [float(np.linalg.norm(k - np.array(prev["lab"], dtype=float))) for k in kits]
             us_cluster = int(np.argmin(d))
             assign.method = "remembered kit colour"
-            print(f"us = cluster {'AB'[us_cluster]} (nearest the remembered shirt colour {prev['bgr']})")
+            print(f"us = cluster {'AB'[us_cluster]} (nearest the remembered shirt colour LAB {prev['lab']})")
         elif prev.get("letter") is not None:
             us_cluster = prev["letter"]
             assign.method = "remembered letter (unreliable across runs)"
     if us_cluster is None:
         us_cluster = _confirm()
         assign.method = assign.method or ("confirmed" if sys.stdin.isatty() else "assumed A")
-    assign.us_kit_bgr = [int(v) for v in kits[us_cluster]]
+    assign.us_kit_lab = [int(v) for v in kits[us_cluster]]
     # persisted into this run's params by the caller (get_team_choice reads it back next time)
     assign.us_cluster = us_cluster
 
@@ -298,15 +298,19 @@ def _hex_bgr(h):
     return np.array([b, g, r], dtype=float)
 
 
-def _pick_by_colour(kits_bgr, kit_hex):
-    """Index (0/1) of the kit whose median shirt colour is closest to the named colour. Coloured
-    kits compare by hue; a white / black / grey kit compares by saturation and lightness so that
-    'white' picks the pale kit even under a warm evening sky."""
+def _lab_to_bgr(lab):
+    return cv2.cvtColor(np.uint8([[np.clip(lab, 0, 255)]]), cv2.COLOR_LAB2BGR)[0, 0]
+
+
+def _pick_by_colour(kits_lab, kit_hex):
+    """Index (0/1) of the kit whose median shirt colour (LAB, as torso_color returns it) is closest
+    to the named colour. Coloured kits compare by hue; a white / black / grey kit compares by
+    saturation and lightness so that 'white' picks the pale kit even under a warm evening sky."""
     target = _hex_bgr(kit_hex)
     if target is None:
         return None
     t_hsv = cv2.cvtColor(np.uint8([[target]]), cv2.COLOR_BGR2HSV)[0, 0].astype(float)
-    k_hsv = [cv2.cvtColor(np.uint8([[np.clip(k, 0, 255)]]), cv2.COLOR_BGR2HSV)[0, 0].astype(float) for k in kits_bgr]
+    k_hsv = [cv2.cvtColor(np.uint8([[_lab_to_bgr(k)]]), cv2.COLOR_BGR2HSV)[0, 0].astype(float) for k in kits_lab]
     if t_hsv[1] < 60:                                   # neutral target: white / grey / black
         scores = [abs(k[1] - t_hsv[1]) / 255.0 + abs(k[2] - t_hsv[2]) / 255.0 for k in k_hsv]
     else:

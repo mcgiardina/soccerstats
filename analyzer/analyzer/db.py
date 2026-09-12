@@ -81,7 +81,7 @@ def get_team_choice(game_id):
     # Cluster letters are not stable between runs (a 360p and a 720p run of the same game put
     # the same kit in A then B), so the remembered choice is the shirt colour of "us", and the
     # letter is only a fallback for runs made before that was stored.
-    return {"letter": {"A": 0, "B": 1, 0: 0, 1: 1}.get(p.get("us_cluster")), "bgr": p.get("us_kit_bgr")}
+    return {"letter": {"A": 0, "B": 1, 0: 0, 1: 1}.get(p.get("us_cluster")), "lab": p.get("us_kit_lab")}
 
 
 def other(team):
