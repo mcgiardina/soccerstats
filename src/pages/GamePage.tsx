@@ -17,6 +17,8 @@ import { HOTKEYS, useHotkeys } from "../components/useHotkeys";
 import * as api from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useShow, useTeam, useTeamNames } from "../lib/team";
+import { kitVars } from "../lib/kit";
+import { useTheme } from "../lib/theme";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
@@ -61,6 +63,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const { isAdmin, ready } = useAuth();
   const admin = isAdmin && !shareView;
   const team = useTeam();
+  const theme = useTheme();
   const show = useShow();
 
   const [b, setB] = useState<GameBundle | null>(null);
@@ -196,7 +199,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const scoreText = usFirst ? `${summary.us.goals}–${summary.them.goals}` : `${summary.them.goals}–${summary.us.goals}`;
 
   return (
-    <div className="page game-page">
+    <div className="page game-page" style={kitVars(g.kit_color, g.opp_kit_color, theme.resolved)}>
       {toast ? <div className="toast">{toast}</div> : null}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: ".6rem" }}>
         <Link to="/" className="crumb">← Season</Link>
@@ -294,7 +297,12 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {panel === "analysis" ? (
                 <div>
                   <p className="small muted">Nothing runs on its own. Queue a run here and the Mac mini worker picks it up within a minute (about an hour per game). It tells the teams apart by the kit colour set on this game{g.kit_color ? "" : " (none set: the team colour is used)"}.</p>
-                  <div className="row" style={{ alignItems: "center", gap: 8, marginBottom: 8 }}><span className="small muted">Our kit:</span><span style={{ display: "inline-block", width: 18, height: 18, borderRadius: 6, background: g.kit_color || "var(--primary)", border: "1px solid var(--line)" }} /><span className="small mono">{g.kit_color || "team colour"}</span>{admin ? <button className="btn sm" onClick={() => setEditGame(true)}>Change</button> : null}</div>
+                  <div className="row" style={{ alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <span className="small muted">Kits:</span>
+                    <span className="badge us">{names.us}</span><span className="small mono">{g.kit_color || "team colour"}</span>
+                    <span className="badge them">{names.them}</span><span className="small mono">{g.opp_kit_color || "not set"}</span>
+                    {admin ? <button className="btn sm" onClick={() => setEditGame(true)}>Change</button> : null}
+                  </div>
                   <button className="btn primary sm" disabled={!video} onClick={queueRun}>Queue analysis run</button>
                   {b.runs.length ? (
                     <div style={{ marginTop: ".75rem" }}>

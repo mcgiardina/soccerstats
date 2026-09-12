@@ -25,7 +25,8 @@ export interface Game {
   pitch_length_m: number | null;
   pitch_width_m: number | null;
   notes: string | null;
-  kit_color: string | null;   // our kit colour this game (hex); the analyzer maps clusters to us/them with it
+  kit_color: string | null;       // our kit colour this game (hex); the analyzer maps clusters to us/them with it
+  opp_kit_color: string | null;   // their kit colour this game (hex); recolours event pills and shot dots
   published: boolean;
   created_at: string;
 }

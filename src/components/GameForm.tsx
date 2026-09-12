@@ -28,6 +28,7 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
     pitch_width_m: initial?.pitch_width_m ?? null,
     notes: initial?.notes ?? "",
     kit_color: initial?.kit_color ?? null,
+    opp_kit_color: initial?.opp_kit_color ?? null,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
     e.preventDefault();
     if (!f.opponent.trim()) { setErr("Opponent is required."); return; }
     setBusy(true); setErr(null);
-    try { await onSubmit({ ...f, opponent: f.opponent.trim(), venue: f.venue?.trim() || null, notes: f.notes?.trim() || null, kit_color: f.kit_color?.trim() || null }); }
+    try { await onSubmit({ ...f, opponent: f.opponent.trim(), venue: f.venue?.trim() || null, notes: f.notes?.trim() || null, kit_color: f.kit_color?.trim() || null, opp_kit_color: f.opp_kit_color?.trim() || null }); }
     catch (ex) { setErr((ex as Error).message); }
     finally { setBusy(false); }
   }
@@ -67,8 +68,14 @@ export default function GameForm({ initial, opponents, onSubmit, submitLabel = "
             <input type="color" value={f.kit_color || teamColor} onChange={(e) => set("kit_color", e.target.value)} style={{ width: 48, height: 36, padding: 2, borderRadius: 10 }} />
             <input type="text" value={f.kit_color ?? ""} onChange={(e) => set("kit_color", e.target.value)} placeholder={teamColor} style={{ flex: 1 }} />
             {f.kit_color ? <button type="button" className="btn sm" onClick={() => set("kit_color", null)}>Use team colour</button> : null}
+          </div></label>
+        <label className="field"><span>Their kit colour this game</span>
+          <div className="row">
+            <input type="color" value={f.opp_kit_color || "#e07a5f"} onChange={(e) => set("opp_kit_color", e.target.value)} style={{ width: 48, height: 36, padding: 2, borderRadius: 10 }} />
+            <input type="text" value={f.opp_kit_color ?? ""} onChange={(e) => set("opp_kit_color", e.target.value)} placeholder="#e07a5f" style={{ flex: 1 }} />
+            {f.opp_kit_color ? <button type="button" className="btn sm" onClick={() => set("opp_kit_color", null)}>Clear</button> : null}
           </div>
-          <span className="small muted">The analyzer uses it to tell which side is us. Pick the shirt colour worn in this video.</span></label>
+          <span className="small muted">Event pills, timeline dots and the shot map take these colours, and the analyzer uses them to tell the teams apart.</span></label>
       </div>
       <label className="field"><span>Notes</span><textarea value={f.notes ?? ""} onChange={(e) => set("notes", e.target.value)} placeholder="Coach notes, conditions, anything searchable later" /></label>
       {err ? <p className="err small">{err}</p> : null}

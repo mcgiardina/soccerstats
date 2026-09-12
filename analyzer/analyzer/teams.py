@@ -217,12 +217,19 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
     kits = [np.median(raw_all[labels == k], axis=0) for k in (0, 1)]
     if us_cluster is None and not force_confirm:
         # 1) the kit colour set on the game (or the team colour): decided by shirt colour
-        kit = db.get_kit_color(game_id)
+        kit, theirs = db.get_kit_colors(game_id)
         pick = _pick_by_colour(kits, kit) if kit else None
         if pick is not None:
             us_cluster = pick
             assign.method = f"kit colour {kit}"
             print(f"us = cluster {'AB'[pick]} (closest to kit colour {kit})")
+        elif theirs:
+            # our colour was inconclusive: the opponent's colour decides from the other side
+            other = _pick_by_colour(kits, theirs)
+            if other is not None:
+                us_cluster = 1 - other
+                assign.method = f"their kit colour {theirs}"
+                print(f"us = cluster {'AB'[us_cluster]} (the other kit is closest to their colour {theirs})")
     if us_cluster is None and not force_confirm:
         # 2) what an earlier run of this game decided, matched by the shirt colour it recorded
         prev = db.get_team_choice(game_id)

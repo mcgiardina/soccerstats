@@ -54,15 +54,22 @@ def finish_run(run_id, status, error=None):
 
 def get_kit_color(game_id):
     """Hex colour of our kit for this game, else the team's primary colour, else None."""
+    return get_kit_colors(game_id)[0]
+
+
+def get_kit_colors(game_id):
+    """(ours, theirs) hex colours for this game; ours falls back to the team's primary colour."""
+    ours, theirs = None, None
     try:
-        g = client().table("games").select("kit_color").eq("id", game_id).limit(1).execute().data
-        if g and g[0].get("kit_color"):
-            return g[0]["kit_color"]
-        t = client().table("team_public").select("primary_color").limit(1).execute().data
-        return t[0].get("primary_color") if t else None
+        g = client().table("games").select("kit_color,opp_kit_color").eq("id", game_id).limit(1).execute().data
+        if g:
+            ours, theirs = g[0].get("kit_color") or None, g[0].get("opp_kit_color") or None
+        if not ours:
+            t = client().table("team_public").select("primary_color").limit(1).execute().data
+            ours = t[0].get("primary_color") if t else None
     except Exception as e:  # noqa: BLE001
         print("kit colour lookup failed:", str(e)[:120])
-        return None
+    return ours, theirs
 
 
 def update_run_params(run_id, extra):
