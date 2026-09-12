@@ -15,7 +15,7 @@ interface Props {
 
 export default function GameForm({ initial, opponents, onSubmit, submitLabel = "Save", onOpponentChange }: Props) {
   const team = useTeam();
-  const teamColor = team.primary_color || CONFIG.colors.primary;
+  const teamColor = team.team.primary_color || CONFIG.colors.primary;
   const [f, setF] = useState<GameInput>({
     played_on: initial?.played_on ?? new Date().toISOString().slice(0, 10),
     opponent: initial?.opponent ?? "",
