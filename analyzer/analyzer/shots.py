@@ -148,6 +148,33 @@ def approach_candidates(dets, fps=5.0, sequence=None, near_h=3.0, far_h=7.0, loo
     return out
 
 
+def crowd_candidates(dets, fps=5.0, n_min=7, radius_h=4.0, hold_s=1.0, min_gap_s=8, existing=(), horizon_s=12.0):
+    """Third trigger: a set piece or scramble. Seven or more players packed within a few
+    keeper-heights of a keeper for a second is a corner, a free kick into the box or a
+    goal-mouth scramble; the ball is hidden in the crowd, so neither speed trigger sees the
+    strike. The window is long (a corner takes ~10 s from crowd to strike) and the judge gets a
+    dense ball track for it."""
+    taken = sorted(c["t"] + PRE_ROLL for c in existing)
+    out, run_start, last = [], None, -1e9
+    for d in dets:
+        crowded = False
+        for k in d.keepers:
+            kh = max(12.0, k[3] - k[1]); cx, cy = (k[0] + k[2]) / 2, k[3]
+            if sum(1 for p in d.players if np.hypot((p[0] + p[2]) / 2 - cx, p[3] - cy) / kh <= radius_h) >= n_min:
+                crowded = True; break
+        if crowded:
+            if run_start is None:
+                run_start = d.t
+            if d.t - run_start >= hold_s and d.t - last >= min_gap_s and not any(abs(run_start - t) < 6 for t in taken):
+                out.append({"t": max(0.0, run_start - PRE_ROLL), "confidence": 0.5, "team": None, "trigger": "crowd",
+                            "horizon": horizon_s, "speed_px_s": None, "jump": None})
+                last = d.t
+        else:
+            run_start = None
+    print(f"{len(out)} crowd candidates")
+    return out
+
+
 def classify_by_keeper(kicks, dets, fps=5.0, window_s=2.0, max_range_h=22.0, end_within_h=6.0, min_cos=0.75):
     """Fallback when no pitch geometry is available. The keeper's bounding-box height is used
     as a ruler (~1.4 m for a youth keeper), so the test is camera-independent:

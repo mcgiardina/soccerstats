@@ -111,7 +111,9 @@ automatically. This is what unlocks referee/keeper exclusion by class, real shot
 4. `teams.py` KMeans(2) on torso colours. Aborts possession if clusters are not separable.
 5. `possession.py` nearest-player attribution, 1.5 s smoothing, per half + 5-minute buckets, turnovers.
 6. `shots.py` ball speed jumps → kick candidates, plus `approach_candidates`: the ball arriving fast at a
-   keeper (a strike from 15 m reaches the keeper in ~1 s and the 5 fps ball track often misses it). `goalshots.py` judges each one against the
+   keeper (a strike from 15 m reaches the keeper in ~1 s and the 5 fps ball track often misses it),
+   and `crowd_candidates`: seven or more players packed around a keeper (corners, free kicks,
+   scrambles) opens a 12 s window with a dense 15 fps ball track read straight from the video. `goalshots.py` judges each one against the
    goal frame found in the image: `goalworld.py` (YOLO-World zero-shot, prompts "goalpost with
    net" and "soccer ball", built into `goal-ball-world.pt` by `get_weights.sh`) tracks the goal
    through the camera pan and supplies the ball track inside the window; `goalposts.py`

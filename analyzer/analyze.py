@@ -171,6 +171,8 @@ def main() -> int:
         cands = shots.candidates(dets, fps=args.fps, sequence=poss["sequence"])
         # second trigger: the ball arriving fast at a keeper (catches strikes the sparse ball track hides)
         cands = sorted(cands + shots.approach_candidates(dets, fps=args.fps, sequence=poss["sequence"], existing=cands), key=lambda c: c["t"])
+        # third trigger: a crowd packed around a keeper (corners, free kicks, scrambles); long window, dense ball track
+        cands = sorted(cands + shots.crowd_candidates(dets, fps=args.fps, existing=cands), key=lambda c: c["t"])
 
         H = {}
         if homography.available() and frames:
@@ -214,7 +216,8 @@ def main() -> int:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, int(round(t * src_fps))); ok, img = cap.read(); fcache[k] = img if ok else None
                     if len(fcache) > 80: fcache.pop(next(iter(fcache)))
                 return fcache[k]
-            gres = goalshots.classify(kick_cands, dets, frame_at, fps=args.fps)
+            dense = detect.dense_ball_sampler(vpath, backend=args.backend) if any(c.get("trigger") == "crowd" for c in kick_cands) else None
+            gres = goalshots.classify(kick_cands, dets, frame_at, fps=args.fps, dense_balls=dense, sequence=poss["sequence"])
             cap.release()
         except Exception as e:  # noqa: BLE001
             print("goal-mouth classification skipped:", str(e)[:120]); gres = [{**c, "outcome": "kick"} for c in kick_cands]
@@ -231,6 +234,10 @@ def main() -> int:
         for g in geo_shots:
             g["confidence"] = round(min(0.95, 0.55 + 0.1 * min(3, g.get("goal_hits", 1))), 3)
             g["source"] = "goal_mouth"
+            if g.get("trigger") == "crowd" and g.get("t_at_goal"):
+                # the window opened when the crowd formed; the strike is ~1-2 s before the ball
+                # reaches the line, so stamp the tag just ahead of that instead
+                g["t"] = round(max(0.0, g["t_at_goal"] - 2.5), 1)
         for g in geo_unresolved:
             g["confidence"] = 0.6
             g["source"] = "goal_mouth"

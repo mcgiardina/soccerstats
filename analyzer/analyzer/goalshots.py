@@ -67,7 +67,7 @@ def _drop_teleports(track, max_speed=MAX_BALL_SPEED_PX_S):
     return pts
 
 
-def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=None):
+def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=None, dense_balls=None, sequence=None):
     """kicks: candidate dicts with 't' (= kick time - PRE_ROLL). frame_at(t) -> BGR image or None.
     finder: goalworld.GoalFinder (default: shared instance; falls back to the crossbar detector).
     Returns list of dicts with outcome and goal geometry."""
@@ -77,13 +77,14 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
     out = []
     for c in kicks:
         t_kick = c["t"] + PRE_ROLL
-        i0, i1 = by_i(t_kick - 0.4), by_i(t_kick + horizon_s)
+        horizon = float(c.get("horizon") or horizon_s)
+        i0, i1 = by_i(t_kick - 0.4), by_i(t_kick + horizon)
         win = dets[i0:i1 + 1]
         # goal mouth per frame (the camera pans, so the goal moves in the image); a few agreeing
         # frames are required, and the ball is judged in goal-relative coordinates.
         hits = []
         # approach-triggered windows are numerous; the goal moves slowly, so every 2nd frame is enough there
-        stride = 2 if (finder is None or c.get("trigger") == "approach") else 1
+        stride = 2 if (finder is None or c.get("trigger") in ("approach", "crowd")) else 1
         for d in win[::stride]:
             if finder is None and not d.keepers:
                 continue
@@ -130,11 +131,21 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
         # detection, chosen by continuity with the previous position
         balls = []
         prev = None
-        for d in win:
-            if not anchored(d.t):
+        # frames to walk: the sampled detections, plus (for crowd windows) a dense ball track from
+        # the video itself, so a strike hidden between 5 fps samples still shows up
+        frames = [(d.t, [(d.ball[0], d.ball[1], 0.5)] if d.ball else [], d) for d in win]
+        if dense_balls is not None and c.get("trigger") == "crowd":
+            extra = {}
+            for (tb, x, y, cf) in dense_balls(t_kick - 0.4, t_kick + horizon):
+                extra.setdefault(round(tb, 2), []).append((x, y, cf))
+            have = {round(f[0], 2) for f in frames}
+            frames += [(tb, pts, None) for tb, pts in extra.items() if tb not in have]
+            frames.sort(key=lambda f: f[0])
+        for (t_f, cands, d) in frames:
+            if not anchored(t_f):
                 continue
-            cands = [(d.ball[0], d.ball[1], 0.5)] if d.ball else []
-            if finder is not None:
+            cands = list(cands)
+            if finder is not None and d is not None:
                 img = frame_at(d.t)
                 if img is not None:
                     cands += [(b[0], b[1], b[2]) for b in finder.balls(img)]
@@ -143,12 +154,11 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
             # the ball we want is the one that continues the track, or failing that the one
             # nearest the goal: a white shoe on the bench or a bright patch in the tree line
             # scores well on confidence but not on either
-            ax_, ay_ = anchor_at(d.t)
+            ax_, ay_ = anchor_at(t_f)
             ref = prev if prev is not None else (ax_, ay_)
             pick = max(cands, key=lambda b: b[2] - 0.6 * min(2.0, np.hypot(b[0] - ref[0], b[1] - ref[1]) / (8.0 * kh)))
             prev = pick
-            ax, ay = anchor_at(d.t)
-            balls.append((d.t, (pick[0] - ax, pick[1] - ay)))
+            balls.append((t_f, (pick[0] - ax_, pick[1] - ay_)))
         balls = _drop_teleports(balls)
         if len(balls) < 2:
             out.append(res); continue
@@ -197,6 +207,9 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                 heading_in = dy < 0 and abs(dy) >= 0.4 * np.hypot(dx, dy)
                 if closing and speed_h >= 4.0 and heading_in and dist0 <= 20:
                     off_t = tb
+        if c.get("team") is None and sequence is not None and (entered_t or off_t):
+            from analyzer.shots import _holder_before
+            res["team"] = _holder_before(sequence, (entered_t or off_t) - 0.6)
         if entered_t is not None:
             # keeper collects? ball seen within 0.8 kh of the keeper after entering
             later = [(t, b) for t, b in balls if t > entered_t]

@@ -165,3 +165,36 @@ def load_cache(path):
                              labels=r["labels"], size=size))
     print(f"loaded {len(dets)} cached frames from {path}")
     return data["fps"], dets
+
+
+def dense_ball_sampler(video_path, backend="local", every=2, imgsz=1920):
+    """Callable (t0, t1) -> [(t, x, y, conf)] from the video itself, every `every`th source frame
+    (15 fps at 30 fps source), using the two fast ball detectors at high resolution with the
+    on-pitch filter. Used for crowd windows where a strike hides between the 5 fps samples."""
+    model, ball_model, device, football = _model(backend)
+    cap = cv2.VideoCapture(video_path)
+    src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+
+    def sample(t0, t1):
+        out = []
+        i0, i1 = int(max(0, t0) * src_fps), int(t1 * src_fps)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i0)
+        for i in range(i0, i1 + 1):
+            ok, img = cap.read()
+            if not ok:
+                break
+            if (i - i0) % every:
+                continue
+            cands = []
+            for m, classes in ((model, [RF_BALL] if football else [COCO_BALL]), (ball_model, [COCO_BALL])):
+                if m is None:
+                    continue
+                r = m.predict(img, device=device, verbose=False, conf=BALL_CONF, imgsz=imgsz, classes=classes)[0]
+                if r.boxes is not None and len(r.boxes):
+                    for (x1, y1, x2, y2), cf in zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist()):
+                        cands.append(((x1 + x2) / 2, (y1 + y2) / 2, float(cf), max(x2 - x1, y2 - y1)))
+            b = _pick_ball(img, cands)
+            if b is not None:
+                out.append((i / src_fps, b[0], b[1], b[2]))
+        return out
+    return sample
