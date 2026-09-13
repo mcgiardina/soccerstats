@@ -222,12 +222,14 @@ def main() -> int:
         except Exception as e:  # noqa: BLE001
             print("goal-mouth classification skipped:", str(e)[:120]); gres = [{**c, "outcome": "kick"} for c in kick_cands]
         geo_shots = [g for g in gres if g["outcome"] in ("on_target", "off_target", "save", "goal?")]
-        geo_unresolved = [g for g in gres if g["outcome"] == "shot"]
+        # an unresolved "shot" is only worth proposing when a real kick started the window; an
+        # approach or crowd window that could not be resolved is left alone (review noise otherwise)
+        geo_unresolved = [g for g in gres if g["outcome"] == "shot" and g.get("trigger") not in ("approach", "crowd")]
         # goal in view and the ball tracked through the window but never near the goal: a
         # trusted "not a shot", so the weaker keeper-approach test must not override it
         trusted_kicks = [g for g in gres if g["outcome"] == "kick" and g.get("ball_track")]
         # (approach-triggered candidates never take the keeper fallback: it would confirm its own trigger)
-        rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") != "approach"]
+        rest = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") not in ("approach", "crowd")]
         # crosses only count when a kick started the window; an approach-triggered window that ends
         # in "cross" is just the ball passing the keeper and would be review noise
         crosses = [g for g in gres if g["outcome"] == "cross" and g.get("trigger") != "approach"]
@@ -253,7 +255,7 @@ def main() -> int:
         for m in more:
             m["source"] = "keeper"
         shot_cands = sorted(shot_cands + geo_shots + geo_unresolved + more, key=lambda c: c["t"])
-        dropped = [g for g in gres if g["outcome"] == "kick" and not g.get("ball_track") and g.get("trigger") == "approach"]
+        dropped = [g for g in gres if g["outcome"] in ("kick", "shot") and g.get("trigger") in ("approach", "crowd") and g not in geo_shots]
         kick_cands = kick_cands + [{**c, "outcome": "cross"} for c in crosses] + [{k: v for k, v in g.items() if k != "ball_track"} for g in trusted_kicks] + [{**g, "outcome": "kick"} for g in dropped]
         snaps = shape.snapshots(dets, assign, H, offsets) if H else []
         located = {round(s["t"], 1): s["location"] for s in shot_cands if s.get("location")}
