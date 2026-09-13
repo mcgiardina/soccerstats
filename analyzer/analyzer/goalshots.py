@@ -46,24 +46,27 @@ def _seg_intersects_rect(p, q, rect, pad=0.0):
 MAX_BALL_SPEED_PX_S = 2500.0
 
 
-def _drop_teleports(track, max_speed=MAX_BALL_SPEED_PX_S):
-    """track: [(t, (x, y)), ...] sorted by t. Removes isolated points until the track is stable."""
+def _drop_teleports(track, max_speed=MAX_BALL_SPEED_PX_S, max_run=8):
+    """track: [(t, (x, y)), ...] sorted by t. Splits the track where consecutive points are farther
+    apart than a ball can travel, then drops short runs that are cut off on both sides (another
+    object - a shoe, a cone - tracked for a second in the middle of the window) until the track
+    is continuous. Single isolated points are the degenerate case."""
     pts = list(track)
-    changed = True
-    while changed and len(pts) >= 2:
-        changed = False
-        keep = []
-        for i, (t, p) in enumerate(pts):
-            far = []
-            for j in (i - 1, i + 1):
-                if 0 <= j < len(pts):
-                    tj, pj = pts[j]
-                    far.append(np.hypot(p[0] - pj[0], p[1] - pj[1]) > max_speed * max(0.05, abs(t - tj)))
-            if far and all(far):
-                changed = True
-                continue
-            keep.append((t, p))
-        pts = keep
+    while len(pts) >= 2:
+        runs, cur = [], [pts[0]]
+        for (t0, p0), (t1, p1) in zip(pts, pts[1:]):
+            if np.hypot(p1[0] - p0[0], p1[1] - p0[1]) > max_speed * max(0.05, t1 - t0):
+                runs.append(cur); cur = []
+            cur.append((t1, p1))
+        runs.append(cur)
+        if len(runs) == 1:
+            break
+        # drop the shortest run that is bounded by a jump on each side (or a short run at either end)
+        short = [i for i, r in enumerate(runs) if len(r) <= max_run]
+        if not short:
+            break
+        victim = min(short, key=lambda i: len(runs[i]))
+        pts = [p for i, r in enumerate(runs) if i != victim for p in r]
     return pts
 
 
@@ -196,9 +199,10 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                 entered_t = tb
                 entry_side = "left" if pa[0] < (rect[0] + rect[2]) / 2 else "right"
             elif entered_t is not None and not inside(pb):
-                # left the mouth region again while still visible: passed across the front (a cross / clearance)
+                # left the mouth region again while still visible: passed across the front (a cross /
+                # clearance) if it kept its pace out the other side; a ball the keeper carries out is not a cross
                 exit_side = "left" if pb[0] < (rect[0] + rect[2]) / 2 else "right"
-                if exit_side != entry_side and (tb - entered_t) < 1.0:
+                if exit_side != entry_side and (tb - entered_t) < 1.0 and speed_h >= 4.0:
                     crossed_front = True
                 break
             elif entered_t is None and off_t is None and _seg_intersects_rect(pa, pb, rect, pad=1.5 * kh):
