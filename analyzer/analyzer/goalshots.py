@@ -163,11 +163,25 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
             out.append(res); continue
         entered_t, off_t, near_keeper_after, crossed_front = None, None, False, False
         inside = lambda p: rect[0] - 0.15 * kh <= p[0] <= rect[2] + 0.15 * kh and rect[1] - 0.15 * kh <= p[1] <= rect[3] + 0.3 * kh
+        near_goal = lambda p: rect[0] - 1.5 * kh <= p[0] <= rect[2] + 1.5 * kh and rect[1] - 1.5 * kh <= p[1] <= rect[3] + 1.5 * kh
+        goal_c = ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2)
+        # A ball that starts the window already at the goal is the keeper's (or a goal kick being
+        # placed): only a ball that arrives from outside can be a shot. Review showed the old rule
+        # calling keeper clearances "on target" and goal kicks "off target".
+        start = 0
+        while start < len(balls) and near_goal(balls[start][1]):
+            start += 1
         entry_side = None
-        for (ta, pa), (tb, pb) in zip(balls, balls[1:]):
+        for (ta, pa), (tb, pb) in zip(balls[start:], balls[start + 1:]):
+            d_a, d_b = np.hypot(pa[0] - goal_c[0], pa[1] - goal_c[1]), np.hypot(pb[0] - goal_c[0], pb[1] - goal_c[1])
+            closing = d_b < d_a - 0.1 * kh
+            dx, dy = pb[0] - pa[0], pb[1] - pa[1]
+            speed_h = float(np.hypot(dx, dy) / max(tb - ta, 1e-3) / kh)          # keeper heights per second
             if entered_t is None and (_seg_intersects_rect(pa, pb, rect, pad=0.15 * kh) or inside(pb)):
                 # a ball well below the goal line is on the pitch in front of the goal, not in the mouth
                 if pb[1] > rect[3] + 0.6 * kh:
+                    continue
+                if not (closing or inside(pb)):
                     continue
                 entered_t = tb
                 entry_side = "left" if pa[0] < (rect[0] + rect[2]) / 2 else "right"
@@ -177,8 +191,12 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                 if exit_side != entry_side and (tb - entered_t) < 1.0:
                     crossed_front = True
                 break
-            elif entered_t is None and _seg_intersects_rect(pa, pb, rect, pad=1.5 * kh):
-                off_t = off_t or tb
+            elif entered_t is None and off_t is None and _seg_intersects_rect(pa, pb, rect, pad=1.5 * kh):
+                # off target only for a struck ball heading at the goal: closing, fast, and coming from
+                # the pitch side (image y decreasing toward the goal line) rather than along the goal line
+                heading_in = dy < 0 and abs(dy) >= 0.4 * np.hypot(dx, dy)
+                if closing and speed_h >= 4.0 and heading_in and dist0 <= 20:
+                    off_t = tb
         if entered_t is not None:
             # keeper collects? ball seen within 0.8 kh of the keeper after entering
             later = [(t, b) for t, b in balls if t > entered_t]
@@ -202,14 +220,17 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
             res["t_at_goal"] = round(float(entered_t), 1)
         elif off_t is not None:
             res["outcome"] = "off_target"; res["t_at_goal"] = round(float(off_t), 1)
-        else:
-            # heading toward the goal and ending within ~2.5 kh of the mouth: unresolved shot
-            end = balls[-1][1]
+        elif start + 1 < len(balls):
+            # arrived from outside, heading at the goal and ending within ~2.5 kh of the mouth, with a
+            # struck ball's pace: unresolved shot (blocked, or the ball was lost before the line)
+            first, end = balls[start][1], balls[-1][1]
             d_end = np.hypot(np.clip(end[0], rect[0], rect[2]) - end[0], np.clip(end[1], rect[1], rect[3]) - end[1]) / kh
-            move = np.array(balls[-1][1]) - np.array(b0)
-            to_goal = np.array([gx, gy]) - np.array(b0)
+            move = np.array(end) - np.array(first)
+            to_goal = np.array([gx, gy]) - np.array(first)
             cos = float(np.dot(move, to_goal) / (np.linalg.norm(move) * np.linalg.norm(to_goal) + 1e-6))
-            if d_end <= 2.5 and cos > 0.8:
+            span = max(balls[-1][0] - balls[start][0], 1e-3)
+            pace_h = float(np.linalg.norm(move) / span / kh)
+            if d_end <= 2.5 and cos > 0.8 and pace_h >= 2.5 and dist0 <= 20:
                 res["outcome"] = "shot"
         out.append(res)
     return out
