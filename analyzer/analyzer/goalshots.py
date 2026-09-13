@@ -196,6 +196,9 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                     continue
                 if not (closing or inside(pb)):
                     continue
+                if speed_h < 3.0:
+                    # a ball rolled slowly into the goal area is a pass or a keeper collecting, not a strike
+                    continue
                 if dist0 > 20:
                     # a ball first seen 20+ keeper-heights out (~30 m) that ends in the mouth is a long
                     # ball or a goal kick from the other end, not a strike at this level
