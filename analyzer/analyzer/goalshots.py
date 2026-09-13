@@ -196,6 +196,10 @@ def classify(kicks, dets, frame_at, fps=5.0, horizon_s=3.0, step_s=0.2, finder=N
                     continue
                 if not (closing or inside(pb)):
                     continue
+                if dist0 > 20:
+                    # a ball first seen 20+ keeper-heights out (~30 m) that ends in the mouth is a long
+                    # ball or a goal kick from the other end, not a strike at this level
+                    continue
                 entered_t = tb
                 entry_side = "left" if pa[0] < (rect[0] + rect[2]) / 2 else "right"
             elif entered_t is not None and not inside(pb):
