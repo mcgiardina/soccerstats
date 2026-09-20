@@ -170,3 +170,18 @@ It is a territory estimate, not possession.
 
 The result goes in the `game_flow` table (`data` jsonb, one row per game). `/flow-demo` in the app shows the
 first real game from `public/demo/flow.json` until that game has a page of its own.
+
+## Goals on the fixed view: 4 of 4 on the first real game
+
+The missed first-half goal had a restart taken in ~10 s. Two stages now: `kickoffs.nominate` (loose, 29
+windows on this game) picks times to re-sample at 2 fps with a zoomed far-side pass, and
+`kickoffs.own_half_restarts` judges them in field coordinates (`fieldmap`): of >= 9 players at most one in
+the wrong half, >= 7 such samples within 8 s. True quick restart: 10 hits; best false window: 5; the rest <= 1.
+`kickoffs.goals` now picks the scoring end by plain ball-activity volume in the 90 s before the restart
+(5x-600x the other end on all four goals); the old burst veto flipped a goal's team when the restart time
+moved by 2 s.
+
+Result: 4 of 4 goals, right end and scoring team, time errors -1.6 / +8.3 / -6.5 / -8.1 s, no false alarms,
+both half starts. Stable for min_hits 6-10, tolerance 3-12 ft, restart time +-6 s. Caveat: tuned and
+scored on the same one game; the next recording is the real test. Known gap: the people pass has a blind
+strip just right of halfway (tile seam), so the kicker on the centre spot is never seen.
