@@ -6,9 +6,9 @@ import { PROVIDERS, detectProvider, resolveSource, type ResolvedSource } from ".
 import { useTeam } from "../lib/team";
 import { fmtClock, fmtDate } from "../lib/time";
 
-// BallerCam goals are tapped on the scoreboard after the fact; on the first real game the taps
-// came 17-40 s after the kick. Start the tag early enough that the goal is in the clip.
-const SCOREBOARD_LAG_S = 30;
+// BallerCam goals are tapped on the scoreboard after the fact. On the first real game the four
+// corrected scoreboard times were 36-39 s after the kick, so take that off; the tag stays a proposal.
+const SCOREBOARD_LAG_S = 38;
 
 const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1));
 

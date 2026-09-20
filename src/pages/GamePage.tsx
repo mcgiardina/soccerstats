@@ -364,7 +364,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       {flow && show("momentum") ? (
         <div style={{ marginTop: "1rem" }}>
           <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} onSeek={seek}
-            goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed)).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
+            goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed || (admin && t.confirmed == null))).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
         </div>
       ) : null}
 
