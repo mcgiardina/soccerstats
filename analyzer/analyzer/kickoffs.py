@@ -81,14 +81,19 @@ def goals(restart_list, goal_activity, us_is_light=True, lookback_s=90.0, settle
             ok = [x for x in bursts if r["t"] - 60.0 <= x[0] <= r["t"] - 12.0]
             if not ok:
                 continue
+            # WHICH END: where the ball was busiest before the restart. WHEN: the latest attack there.
+            volume = sum(x[2] for x in bursts)
             b = max(ok, key=lambda x: x[0])
-            if best is None or b[0] > best[1][0]:
-                best = (side, b)
+            if best is None or volume > best[2]:
+                best = (side, b, volume)
         if best is None:
             out.append({"kind": "goal", "t": r["t"] - 35.0, "restart_t": r["t"], "goal_end": None, "team": None, "confidence": 0.5})
             continue
-        side, b = best
+        side, b, _volume = best
         light_scored = side != r["light_side"]
-        out.append({"kind": "goal", "t": float(b[0]), "restart_t": r["t"], "goal_end": side,
+        # Stamp ~30 s before the restart (goals came 20-38 s before theirs), kept inside the attack
+        # the ball tracker saw, so a long build-up does not drag the tag half a minute early.
+        t_goal = float(np.clip(r["t"] - 30.0, b[0], max(b[0], b[1])))
+        out.append({"kind": "goal", "t": t_goal, "restart_t": r["t"], "goal_end": side,
                     "team": ("us" if light_scored == us_is_light else "them"), "confidence": 0.85})
     return out
