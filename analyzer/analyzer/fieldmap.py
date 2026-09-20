@@ -5,7 +5,7 @@ near touchline, Z up; looking across the field, tilted down, with a little yaw a
 fisheye with one radial term, r = f * theta * (1 + k * theta^2) from the image centre.
 
 Fit from landmarks whose field position is known. On a football-lined pitch the yard lines and
-numerals are ideal: they are exactly 15 / 30 ft apart. First real game (2026-09-12, 3840x2160
+numerals are ideal: they are exactly 15 / 30 ft apart. First real game (2026-09-20, 3840x2160
 panoramic): 16 landmarks fitted to a median of 6 px (worst 24 px); players then map onto a
 ~290 x 200 ft rectangle, as they should. The camera figures from the BallerCam app are used as soft
 priors only; the fit moved them a little (height 12.8 ft, tilt 15.2 deg, 14.7 ft from the line).

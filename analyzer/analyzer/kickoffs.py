@@ -5,7 +5,7 @@ kickoff has a signature nothing else has: for several seconds every outfield pla
 on one side of the halfway line and every player of the other team on the other side. That needs
 only player boxes and shirt brightness, which are reliable even when the ball is a 5 px speck.
 
-First real game (ASC LB 1-3 Possible FC, 2026-09-12): the rule fired 5 times in 80 minutes, all
+First real game (ASC LB 1-3 Possible FC, 2026-09-20): the rule fired 5 times in 80 minutes, all
 true restarts (both half starts and 3 of the 4 goals), no false alarms. The miss was a first-half
 restart taken in ~10 s before the teams had separated; a second stage (nominate -> dense re-sample
 -> own_half_restarts, in field coordinates) catches it, giving 4 of 4. Paired with the motion tracker

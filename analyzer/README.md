@@ -62,7 +62,7 @@ Overnight findings on the two BallerCam games (Sept 2026):
 - On the older XbotGo samples (camera at midfield, 720p) the far goal is a few pixels tall
   and YOLO-World does not see it, so those games only get the keeper-approach fallback.
   The BallerCam view (higher, tighter pan) is the one this pipeline is tuned for.
-- First real game (ASC LB vs Possible FC, 2026-09-12, BallerCam Smart View, camera ~2.5 m up on a
+- First real game (ASC LB vs Possible FC, 2026-09-20, BallerCam Smart View, camera ~2.5 m up on a
   football-lined turf field): 0 of 4 goals found. Causes, in order: (1) painted hash marks and
   numerals are picked as the ball (500 of 500 frames in one clip; a per-candidate static test and a
   blob-elongation test both failed to separate them, it needs a background-registered mask or the
