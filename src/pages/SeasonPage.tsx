@@ -5,6 +5,8 @@ import { loadSeason, type SeasonData } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
+
+const ytOf = (videos: { youtube_id: string | null; kind: string | null }[]) => videos.find((x) => x.youtube_id && x.kind !== "wide_fixed")?.youtube_id ?? null;
 import { summarizeGame } from "../lib/stats";
 import TrendCharts, { buildTrend } from "../components/TrendCharts";
 import DateRangePicker from "../components/DateRangePicker";
@@ -90,7 +92,7 @@ export default function SeasonPage() {
           const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && t.type === "goal");
           return (
             <Link key={g.id} to={isAdmin ? `/games/${g.id}` : `/g/${g.id}`} className="game-card reveal">
-              {v ? <img className="thumb" src={thumbnailUrl(v.youtube_id, "hq")} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}
+              {ytOf(g.videos) ? <img className="thumb" src={thumbnailUrl(ytOf(g.videos)!, "hq")} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}
               <div className="body">
                 <div className="opp">{g.home_away === "away" ? "@ " : "vs "}{g.opponent}</div>
                 <div className="meta">

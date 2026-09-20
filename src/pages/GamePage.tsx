@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import YouTubePlayer, { type PlayerHandle } from "../components/YouTubePlayer";
+import VideoPlayer from "../components/VideoPlayer";
+import type { PlayerHandle } from "../components/YouTubePlayer";
 import Timeline from "../components/Timeline";
 import TagList from "../components/TagList";
 import TagEditor from "../components/TagEditor";
@@ -26,7 +27,7 @@ import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/type
 import { summarizeGame, trustedTags } from "../lib/stats";
 import { fmtDate, seekTime, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
-import { fetchOEmbed, parseYouTubeId, watchUrl } from "../lib/youtube";
+import { openUrl, providerLabel, resolveSource } from "../lib/sources";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
 
 function PassThirds({ passes, names }: { passes: import("../lib/types").PassEvent[]; names: { us: string; them: string } }) {
@@ -88,10 +89,14 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const reload = useCallback(() => api.getGameBundle(id).then(setB).catch((e) => setErr(e.message)), [id]);
   useEffect(() => { if (ready) reload(); }, [reload, ready, isAdmin]);
   const [flow, setFlow] = useState<FlowData | null>(null);
+  const [playId, setPlayId] = useState<string | null>(null);
+  const resumeAt = useRef<number | null>(null);
   useEffect(() => { let on = true; if (ready && id) api.getFlow(id).then((f) => { if (on) setFlow(f); }); return () => { on = false; }; }, [ready, id, isAdmin]);
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
   const video = b ? mainVideo(b.videos) : null;
+  const watchable = b ? b.videos.filter((v) => v.kind !== "wide_fixed") : [];
+  const playing = watchable.find((v) => v.id === playId) ?? video;
   const pitch = { lengthM: b?.game.pitch_length_m ?? team.pitch.lengthM, widthM: b?.game.pitch_width_m ?? team.pitch.widthM };
   const visibleTags = useMemo(() => (b ? (admin ? b.tags : trustedTags(b.tags)) : []), [b, admin]);
   const summary = useMemo(() => (b ? summarizeGame(b.game, video, b.tags, b.shots, b.teamStats, period) : null), [b, video, period]);
@@ -157,11 +162,16 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
   // ---- video ---------------------------------------------------------------
   async function attachVideo() {
-    const yid = parseYouTubeId(videoUrl);
-    if (!yid || !b) { showToast("Not a YouTube URL"); return; }
-    const o = await fetchOEmbed(yid);
-    await api.addVideo({ game_id: b.game.id, youtube_id: yid, kind: videoKind, title: o?.title ?? null });
-    setVideoUrl(""); reload();
+    if (!b) return;
+    try {
+      const r = await resolveSource(videoUrl);
+      await api.addVideo({ game_id: b.game.id, kind: videoKind, ...r.video });
+      // a camera link also knows where its full-field file is: keep it as the analysis source
+      if (r.video.raw_url && videoKind !== "wide_fixed" && !b.videos.some((v) => v.raw_url === r.video.raw_url && v.kind === "wide_fixed")) {
+        await api.addVideo({ game_id: b.game.id, kind: "wide_fixed", provider: r.video.provider, provider_ref: r.video.provider_ref, source_url: r.video.source_url, stream_url: r.video.raw_url, raw_url: r.video.raw_url, title: `${r.video.title ?? "Game"} (full field)` });
+      }
+      setVideoUrl(""); reload();
+    } catch (e) { showToast(e instanceof Error ? e.message : "Couldn't attach that link"); }
   }
 
   async function updatePeriods(patch: Partial<typeof video>) {
@@ -214,7 +224,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         <div className="game-main">
           {video ? (
             <>
-              <YouTubePlayer ref={player} youtubeId={video.youtube_id} startAt={startAt} onTime={setCurrent} onDuration={setDuration} />
+              <VideoPlayer key={playing!.id} ref={player} video={playing!} startAt={resumeAt.current ?? startAt} onTime={setCurrent} onDuration={setDuration} />
               <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={show("tags") ? visibleTags : []} onSeek={seek} />
               <div className="transport">
                 <span className="mono clock">{toMatchTime(video, current).label}</span>
@@ -227,7 +237,14 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                   <button className="btn icon" title="Forward 5 seconds (→)" onClick={() => player.current?.nudge(5)}><SkipIcon dir="fwd" n={5} /></button>
                   <button className="btn icon" title="Forward 30 seconds (shift+→)" onClick={() => player.current?.nudge(30)}><SkipIcon dir="fwd" n={30} /></button>
                 </div>
-                <a className="small muted" href={watchUrl(video.youtube_id, current)} target="_blank" rel="noreferrer">Open on YouTube ↗</a>
+                <div className="row" style={{ gap: ".6rem", alignItems: "center" }}>
+                  {watchable.length > 1 ? (
+                    <div className="seg" role="group" aria-label="Video source" title="Same recording, two hosts. Tag times follow the first source.">
+                      {watchable.map((v) => <button key={v.id} className={v.id === playing!.id ? "on" : ""} onClick={() => { resumeAt.current = player.current?.currentTime() ?? current; setPlayId(v.id); }}>{providerLabel(v)}</button>)}
+                    </div>
+                  ) : null}
+                  {openUrl(playing!, current) ? <a className="small muted" href={openUrl(playing!, current)!} target="_blank" rel="noreferrer">Open on {providerLabel(playing!)} ↗</a> : null}
+                </div>
               </div>
               <div className="title-row">
                 <div>
@@ -263,7 +280,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               </div>
               <h2>No video yet</h2>
               {admin ? (
-                <div className="row"><input type="url" placeholder="Paste YouTube URL" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} />
+                <div className="row"><input type="url" placeholder="Paste a YouTube or BallerCam link" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} />
                   <select value={videoKind} onChange={(e) => setVideoKind(e.target.value as NonNullable<Video["kind"]>)} style={{ width: "auto" }}>{VIDEO_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
                   <button className="btn primary" onClick={attachVideo}>Attach</button></div>
               ) : <p className="muted">Film hasn't been attached to this game.</p>}
@@ -375,7 +392,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
         <div className="below-span">
           {g.notes ? <div className="card"><h3>Notes</h3><p className="small" style={{ whiteSpace: "pre-wrap" }}>{g.notes}</p></div> : null}
-          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · YouTube{b.videos.some((v) => v.kind === "wide_fixed") ? " · wide-angle source attached for analysis" : ""}</div> : null}
+          {video ? <div className="card tiny muted">Video: {video.title ?? video.youtube_id ?? "untitled"}{video.duration_seconds ? ` · ${Math.round(video.duration_seconds / 60)} min` : ""} · {watchable.map(providerLabel).join(" + ")}{b.videos.some((v) => v.kind === "wide_fixed") ? " · wide-angle source attached for analysis" : ""}</div> : null}
         </div>
       </div>
 
@@ -389,12 +406,12 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           {b.videos.map((v) => (
             <div key={v.id} className="tag-row small">
               <span className="badge">{VIDEO_KINDS.find((k) => k.value === v.kind)?.label ?? v.kind ?? "video"}</span>
-              <span className="lbl">{v.title ?? v.youtube_id}{v.duration_seconds ? ` · ${Math.round(v.duration_seconds / 60)} min` : ""}</span>
+              <span className="lbl">{providerLabel(v)} · {v.title ?? v.youtube_id}{v.duration_seconds ? ` · ${Math.round(v.duration_seconds / 60)} min` : ""}</span>
               <button className="btn sm danger" onClick={async () => { if (confirm("Detach this video? Tags stay but lose their video link.")) { await api.deleteVideo(v.id); reload(); } }}>Detach</button>
             </div>
           ))}
           <div className="row" style={{ marginTop: ".5rem" }}>
-            <input type="url" placeholder="YouTube URL of another source" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+            <input type="url" placeholder="YouTube or BallerCam link of another source" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
             <select value={videoKind} onChange={(e) => setVideoKind(e.target.value as NonNullable<Video["kind"]>)} style={{ width: "auto" }}>{VIDEO_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}</select>
             <button className="btn sm" onClick={attachVideo}>Attach</button>
           </div>

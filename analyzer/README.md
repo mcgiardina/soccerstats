@@ -185,3 +185,12 @@ Result: 4 of 4 goals, right end and scoring team, time errors -1.6 / +8.3 / -6.5
 both half starts. Stable for min_hits 6-10, tolerance 3-12 ft, restart time +-6 s. Caveat: tuned and
 scored on the same one game; the next recording is the real test. Known gap: the people pass has a blind
 strip just right of halfway (tile seam), so the kicker on the centre spot is never seen.
+
+## Video sources other than YouTube
+
+`videos` rows now carry `provider`, `provider_ref`, `source_url`, `stream_url`, `raw_url` (migration 0009);
+`youtube_id` may be null. A BallerCam share link resolves, without a login, through the public JSON its own
+share page reads (`www.ballertv.com/api/ballercam_web/streams/<slug>`, CORS `*`): an HLS playlist (played
+in the app with hls.js), the raw full-field `.mov` (stored as the `wide_fixed` source), team names, kit
+colours, score, kick-off and scoreboard goals. `fetch.download_video(row)` downloads either kind; the old
+homography path skips a raw camera file rather than pulling 9 GB.

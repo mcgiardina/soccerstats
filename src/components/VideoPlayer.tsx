@@ -1,0 +1,81 @@
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import YouTubePlayer, { type PlayerHandle } from "./YouTubePlayer";
+import type { Video } from "../lib/types";
+import { fetchBallerCam } from "../lib/sources";
+
+interface Props {
+  video: Video;
+  startAt?: number;
+  onTime?: (t: number) => void;
+  onDuration?: (d: number) => void;
+}
+
+/** One player for every source: YouTube through its iframe API, anything else (BallerCam's HLS
+ *  stream, a direct mp4) through a plain <video>, with hls.js where the browser has no native HLS. */
+const VideoPlayer = forwardRef<PlayerHandle, Props>(function VideoPlayer({ video, ...rest }, ref) {
+  if (video.youtube_id) return <YouTubePlayer ref={ref} youtubeId={video.youtube_id} {...rest} />;
+  return <StreamPlayer ref={ref} video={video} {...rest} />;
+});
+export default VideoPlayer;
+
+const StreamPlayer = forwardRef<PlayerHandle, Props>(function StreamPlayer({ video, startAt, onTime, onDuration }, ref) {
+  const el = useRef<HTMLVideoElement>(null);
+  const [src, setSrc] = useState(video.stream_url);
+  const [err, setErr] = useState<string | null>(null);
+  const retried = useRef(false);
+  const onTimeRef = useRef(onTime); const onDurRef = useRef(onDuration);
+  onTimeRef.current = onTime; onDurRef.current = onDuration;
+
+  useEffect(() => { setSrc(video.stream_url); retried.current = false; setErr(null); }, [video.id, video.stream_url]);
+
+  useEffect(() => {
+    const v = el.current; if (!v || !src) return;
+    let hls: { destroy(): void } | null = null, cancelled = false;
+    // A stored stream address can go stale; BallerCam will give the current one for the same game.
+    const fail = async () => {
+      if (!retried.current && video.provider === "ballercam" && video.provider_ref) {
+        retried.current = true;
+        try { const s = await fetchBallerCam(video.provider_ref); const fresh = s.h264VideoUrl || s.videoUrl; if (fresh && fresh !== src && !cancelled) { setSrc(fresh); return; } } catch { /* fall through */ }
+      }
+      if (!cancelled) setErr("This video couldn't be loaded from its host.");
+    };
+    const isHls = /\.m3u8($|\?)/i.test(src);
+    if (isHls && !v.canPlayType("application/vnd.apple.mpegurl")) {
+      import("hls.js").then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (!Hls.isSupported()) { setErr("This browser can't play this stream."); return; }
+        const h = new Hls({ startPosition: startAt && startAt > 0 ? startAt : -1 });
+        h.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) fail(); });
+        h.loadSource(src); h.attachMedia(v); hls = h;
+      });
+    } else {
+      v.src = src;
+      if (startAt && startAt > 0) v.addEventListener("loadedmetadata", () => { v.currentTime = startAt; }, { once: true });
+    }
+    const time = () => onTimeRef.current?.(v.currentTime);
+    const dur = () => { if (Number.isFinite(v.duration) && v.duration > 0) onDurRef.current?.(v.duration); };
+    const bad = () => { if (!isHls || v.canPlayType("application/vnd.apple.mpegurl")) fail(); };
+    v.addEventListener("timeupdate", time); v.addEventListener("seeking", time); v.addEventListener("durationchange", dur); v.addEventListener("error", bad);
+    return () => {
+      cancelled = true; hls?.destroy();
+      v.removeEventListener("timeupdate", time); v.removeEventListener("seeking", time); v.removeEventListener("durationchange", dur); v.removeEventListener("error", bad);
+      v.removeAttribute("src"); v.load();
+    };
+    // startAt is read once, like the YouTube player.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src, video.provider, video.provider_ref]);
+
+  useImperativeHandle(ref, () => ({
+    seek(t, play = true) { const v = el.current; if (!v) return; v.currentTime = Math.max(0, t); if (play) void v.play().catch(() => {}); onTimeRef.current?.(Math.max(0, t)); },
+    currentTime() { return el.current?.currentTime ?? 0; },
+    togglePlay() { const v = el.current; if (!v) return; if (v.paused) void v.play().catch(() => {}); else v.pause(); },
+    nudge(delta) { const v = el.current; if (v) v.currentTime = Math.max(0, v.currentTime + delta); },
+  }));
+
+  return (
+    <div className="player-wrap">
+      <video ref={el} controls playsInline preload="metadata" />
+      {err ? <div className="player-err">{err}{video.source_url ? <> <a href={video.source_url} target="_blank" rel="noreferrer">Open it there ↗</a></> : null}</div> : null}
+    </div>
+  );
+});

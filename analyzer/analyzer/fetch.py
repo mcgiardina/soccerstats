@@ -60,3 +60,32 @@ def download(youtube_id: str, max_height: int = 720) -> str:
         last = r.returncode
     raise RuntimeError(f"yt-dlp could not download {youtube_id} at >= {min(MIN_HEIGHT, max_height - 20)}p (last: {last}). "
                        f"Update yt-dlp (pip install -U yt-dlp) and check the video is public or unlisted and finished processing.")
+
+
+def download_stream(url: str, key: str, max_height: int = 720) -> str:
+    """A camera vendor's own stream (BallerCam HLS) or a direct file, fetched with yt-dlp's generic
+    extractor. Only one rendition is offered (1080p), so max_height picks nothing; the analyzer
+    resizes as it reads. Without ffmpeg the result is MPEG-TS in an .mp4 name, which OpenCV reads."""
+    os.makedirs(CACHE, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in key)[:120]
+    out = os.path.join(CACHE, f"{safe}.mp4")
+    if os.path.exists(out) and os.path.getsize(out) > 1_000_000 and probe_height(out) >= MIN_HEIGHT:
+        return out
+    print("fetching stream", key)
+    r = subprocess.run([sys.executable, "-m", "yt_dlp", "--no-playlist", "--fixup", "never", "-f", "bestvideo/best", "-o", out, url])
+    if r.returncode != 0 or not os.path.exists(out) or os.path.getsize(out) < 1_000_000:
+        raise RuntimeError(f"could not download the stream for {key} (yt-dlp exit {r.returncode}); the share link may have been turned off")
+    h = probe_height(out)
+    if h < MIN_HEIGHT:
+        os.remove(out)
+        raise RuntimeError(f"the stream for {key} is only {h}p; need >= {MIN_HEIGHT}p")
+    return out
+
+
+def download_video(v: dict, max_height: int = 720) -> str:
+    """Any row of the videos table: YouTube by id, anything else by its stream address."""
+    if v.get("youtube_id"):
+        return download(v["youtube_id"], max_height=max_height)
+    if v.get("stream_url"):
+        return download_stream(v["stream_url"], f"{v.get('provider') or 'file'}_{v.get('provider_ref') or v['id']}", max_height=max_height)
+    raise RuntimeError("this video has neither a YouTube id nor a stream address")

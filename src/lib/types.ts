@@ -34,7 +34,12 @@ export interface Game {
 export interface Video {
   id: string;
   game_id: string;
-  youtube_id: string;
+  youtube_id: string | null;
+  provider: "youtube" | "ballercam" | "veo" | "trace" | "xbot" | "file" | null;
+  provider_ref: string | null;
+  source_url: string | null;
+  stream_url: string | null;   // HLS or mp4 the in-app player uses when there is no youtube_id
+  raw_url: string | null;      // the camera's full-field file, for the analyzer only
   kind: "stream_archive" | "upload" | "wide_fixed" | null;
   title: string | null;
   duration_seconds: number | null;
@@ -156,8 +161,8 @@ export function mainVideo(videos: Video[]): Video | null {
 }
 
 export const VIDEO_KINDS: { value: NonNullable<Video["kind"]>; label: string; hint: string }[] = [
-  { value: "upload", label: "Processed upload", hint: "BallerCam 1080p file from the camera roll, uploaded to YouTube" },
-  { value: "stream_archive", label: "Stream archive", hint: "A live-stream recording saved on YouTube" },
+  { value: "upload", label: "Processed upload", hint: "The film people watch: a YouTube upload or the camera's own share link (BallerCam)" },
+  { value: "stream_archive", label: "Stream archive", hint: "A live-stream recording" },
   { value: "wide_fixed", label: "Wide-angle source", hint: "Raw fisheye / fixed full-pitch camera, for analysis only; not shown to viewers" },
 ];
 

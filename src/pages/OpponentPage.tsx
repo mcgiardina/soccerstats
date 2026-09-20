@@ -40,7 +40,7 @@ export default function OpponentPage() {
         const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), data.shots.filter((x) => x.game_id === g.id), data.teamStats.filter((x) => x.game_id === g.id));
         return (
           <div key={g.id} className="card row opp-card" style={{ alignItems: "flex-start" }}>
-            {v ? <img className="thumb-sm" src={thumbnailUrl(v.youtube_id, "hq")} alt="" /> : null}
+            {v?.youtube_id ? <img className="thumb-sm" src={thumbnailUrl(v.youtube_id, "hq")} alt="" /> : null}
             <div style={{ flex: 1, minWidth: 200 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <strong>{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}</strong>

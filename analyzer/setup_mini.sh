@@ -27,6 +27,8 @@ xattr -w com.dropbox.ignored 1 .venv    # a rebuilt .venv is a new folder: keep 
 echo "     using $("$PY" --version)"
 # yt-dlp prefers a JavaScript runtime for YouTube; Deno is small and the one it enables by default
 if command -v brew >/dev/null && ! command -v deno >/dev/null; then brew install -q deno || true; fi
+# ffmpeg lets yt-dlp finish HLS downloads (BallerCam share links) as proper mp4; it works without, as MPEG-TS
+if command -v brew >/dev/null && ! command -v ffmpeg >/dev/null; then brew install -q ffmpeg || true; fi
 .venv/bin/pip install -q --upgrade pip
 .venv/bin/pip install -q -r requirements.txt gdown
 .venv/bin/pip install -q --upgrade yt-dlp   # a stale yt-dlp falls back to 360p streams

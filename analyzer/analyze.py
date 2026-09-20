@@ -124,7 +124,7 @@ def main() -> int:
             args.fps, dets = detect.load_cache(cache_path)
             frames, assign, path = [], None, None
             if args.relabel:
-                path = fetch.download(main_video["youtube_id"])
+                path = fetch.download_video(main_video)
                 frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
                 if len(frames) != len(dets):
                     raise RuntimeError(f"frame count mismatch: {len(frames)} sampled vs {len(dets)} cached")
@@ -141,7 +141,7 @@ def main() -> int:
                     d.img = None
                 frames = []
         else:
-            path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
+            path = fetch.download_video(main_video, max_height=args.max_height)
             # what this machine saw: lets two runs of the same game (laptop vs mini) be compared
             if not args.dry_run:
                 db.update_run_params(run["id"], {"diag": diagnostics(path)})
@@ -197,6 +197,11 @@ def main() -> int:
         if homography.available() and frames:
             # Prefer the wide-angle source for anything positional; de-warp it if a calibration exists.
             by_t = {round(d.t, 1): d for d in dets}
+            if wide and not wide.get("youtube_id"):
+                # a camera's raw full-field file (4K HEVC, ~9 GB) is for the fixed-view pipeline, which
+                # reads it over HTTP; this path would download it and hold its frames in memory
+                print("wide source is a raw camera file: skipped for homography")
+                wide = None
             if wide:
                 src_path = fetch.download(wide["youtube_id"], max_height=args.max_height)
                 fn = dewarp.load(args.camera)
@@ -209,7 +214,7 @@ def main() -> int:
             homography.save_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"), H)
         elif args.from_cache and args.refit_homography and homography.available():
             by_t = {round(d.t, 1): d for d in dets}
-            path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
+            path = fetch.download_video(main_video, max_height=args.max_height)
             step = max(1, int(round(args.fps)))
             fr = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
             H = homography.fit(fr[::step], dets_by_t=by_t)
@@ -224,7 +229,7 @@ def main() -> int:
         shot_cands, kick_cands = shots.classify(cands, dets, H) if H else ([], cands)
         # Goal-mouth classification against the goal frame found in the image (best precision).
         try:
-            vpath = path or fetch.download(main_video["youtube_id"], max_height=args.max_height)
+            vpath = path or fetch.download_video(main_video, max_height=args.max_height)
             import cv2
             cap = cv2.VideoCapture(vpath); src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
             fcache = {}
