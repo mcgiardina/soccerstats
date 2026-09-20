@@ -11,6 +11,8 @@ interface Props {
   colors: { us: string; them: string };
   goals?: FlowGoal[];
   onSeek?: (t: number) => void;
+  /** remembers this viewer's colour choices for this game */
+  storageKey?: string;
 }
 
 // Surface mesh. The data grid (20 x 10) is sampled smoothly onto this finer one.
@@ -19,7 +21,9 @@ const PITCH_W = 0.66;          // width / length of the drawn pitch
 const RELIEF = 0.17;           // height of the tallest crowd of players, in pitch lengths
 const SPIKE = 0.22;            // height of the strongest attack
 const YAW = -0.42, ELEV = 0.6, DIST = 3.6;
-const GAME_SECONDS_PER_SECOND = 110;
+const GAME_SECONDS_PER_SECOND = 75;   // the whole match in about 70 s
+const GOAL_SLOWDOWN = 0.12;           // near a goal, time almost stops so it cannot be missed
+const GOAL_SHOW_S = 75;               // game seconds the goal banner stays up
 const SHADES = 14;
 
 function decode(b64: string): Uint8Array {
@@ -54,7 +58,7 @@ function ramp(c: [number, number, number], light: boolean): { fill: string[]; li
   return { fill, line };
 }
 
-export default function FlowField({ flow, names, colors, goals = [], onSeek }: Props) {
+export default function FlowField({ flow, names, colors: kitColors, goals = [], onSeek, storageKey }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const spark = useRef<HTMLCanvasElement>(null);
@@ -62,8 +66,18 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
   const playing = useRef(false);
   const buf = useRef({ z: new Float32Array((MX + 1) * (MY + 1)), seam: new Float32Array(MY + 1), px: new Float32Array((MX + 1) * (MY + 1) * 2) });
   const [isPlaying, setPlaying] = useState(false);
-  const [readout, setReadout] = useState({ t: tRef.current, us: 0, them: 0 });
+  const [readout, setReadout] = useState<{ t: number; us: number; them: number; goal: FlowGoal | null }>({ t: tRef.current, us: 0, them: 0, goal: null });
   const [help, setHelp] = useState(false);
+  // Kit colours are the default; anyone can pick their own (two dark kits, or a preference), kept on this device.
+  const [picked, setPicked] = useState<{ us?: string; them?: string }>(() => {
+    try { return storageKey ? JSON.parse(localStorage.getItem(`matchfilm.flow.${storageKey}`) ?? "{}") : {}; } catch { return {}; }
+  });
+  const pick = (side: "us" | "them", hex: string | undefined) => setPicked((p) => {
+    const next = { ...p, [side]: hex }; if (!hex) delete next[side];
+    try { if (storageKey) localStorage.setItem(`matchfilm.flow.${storageKey}`, JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
+  const colors = { us: picked.us ?? kitColors.us, them: picked.them ?? kitColors.them };
 
   const H = useMemo(() => decode(flow.h), [flow.h]);
   const S = useMemo(() => decode(flow.seam), [flow.seam]);
@@ -187,12 +201,25 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
     const seamPts: [number, number][] = Array.from({ length: MY + 1 }, (_, my) => [seam[my], my / MY]);
     ctx.save(); ctx.shadowColor = "rgba(255,255,255,.8)"; ctx.shadowBlur = 8; drape(seamPts, "rgba(255,255,255,.92)", 1.6); ctx.restore();
 
-    // goal flashes
+    // goals: a wash of the scorer's colour over the stage, shock rings and a gold beacon at the goal mouth
     for (const g of goals) {
-      const age = t - g.t; if (age < 0 || age > 60) continue;
+      const age = t - g.t; if (age < -2 || age > GOAL_SHOW_S) continue;
+      const c = g.team === "us" ? cUs : cThem;
       const u = g.team === "us" ? 0.955 : 0.045; const p = proj(u, 0.5, zAt(u, 0.5) + 0.02);
-      ctx.beginPath(); ctx.arc(p[0], p[1], 6 + age * 1.4, 0, Math.PI * 2); ctx.strokeStyle = `rgba(255,214,102,${Math.max(0, 1 - age / 60)})`; ctx.lineWidth = 2; ctx.stroke();
-      ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, Math.PI * 2); ctx.fillStyle = "#ffd666"; ctx.fill();
+      if (age >= 0 && age < 14) {
+        const k = 1 - age / 14; const wash = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], Math.max(w, h) * 0.9);
+        wash.addColorStop(0, `rgba(${c.join(",")},${0.42 * k})`); wash.addColorStop(0.5, `rgba(${c.join(",")},${0.12 * k})`); wash.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h); ctx.restore();
+      }
+      if (age >= 0) for (const lag of [0, 9, 18]) {
+        const a = age - lag; if (a < 0 || a > 40) continue;
+        ctx.beginPath(); ctx.arc(p[0], p[1], 8 + a * 3.2, 0, Math.PI * 2); ctx.strokeStyle = `rgba(255,214,102,${0.9 * (1 - a / 40)})`; ctx.lineWidth = 2.5; ctx.stroke();
+      }
+      const fade = Math.max(0, Math.min(1, (GOAL_SHOW_S - age) / 20));
+      const beam = ctx.createLinearGradient(p[0], p[1], p[0], p[1] - h * 0.5);
+      beam.addColorStop(0, `rgba(255,214,102,${0.75 * fade})`); beam.addColorStop(1, "rgba(255,214,102,0)");
+      ctx.fillStyle = beam; ctx.fillRect(p[0] - 2, p[1] - h * 0.5, 4, h * 0.5);
+      ctx.save(); ctx.shadowColor = "#ffd666"; ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,214,102,${fade})`; ctx.fill(); ctx.restore();
     }
 
     // end labels
@@ -201,7 +228,7 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
     const la = proj(0, 1, 0), lb = proj(1, 1, 0);
     ctx.textAlign = "left"; ctx.fillText(`${names.us.toUpperCase()} GOAL`, la[0], la[1] - 10);
     ctx.textAlign = "right"; ctx.fillText(`${names.them.toUpperCase()} GOAL`, lb[0], lb[1] - 10);
-  }, [sample, pal, goals, names]);
+  }, [sample, pal, goals, names, cUs, cThem]);
 
   const drawSpark = useCallback(() => {
     const cv = spark.current; if (!cv) return;
@@ -224,7 +251,7 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
 
   const sync = useCallback(() => {
     const t = tRef.current;
-    setReadout({ t, us: goals.filter((g) => g.team === "us" && g.t <= t).length, them: goals.filter((g) => g.team === "them" && g.t <= t).length });
+    setReadout({ t, us: goals.filter((g) => g.team === "us" && g.t <= t).length, them: goals.filter((g) => g.team === "them" && g.t <= t).length, goal: goals.find((g) => t >= g.t && t - g.t < GOAL_SHOW_S) ?? null });
   }, [goals]);
 
   // animation loop
@@ -233,7 +260,8 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - last) / 1000); last = now;
       if (playing.current) {
-        let t = tRef.current + dt * GAME_SECONDS_PER_SECOND;
+        const nearGoal = goals.some((g) => tRef.current > g.t - 4 && tRef.current < g.t + 14);
+        let t = tRef.current + dt * GAME_SECONDS_PER_SECOND * (nearGoal ? GOAL_SLOWDOWN : 1);
         if (flow.halves.length > 1 && t > flow.halves[0][1] + 20 && t < flow.halves[1][0]) t = flow.halves[1][0];   // skip the break
         if (t >= tStop) { t = tStop; playing.current = false; setPlaying(false); }
         tRef.current = t;
@@ -244,7 +272,7 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [draw, drawSpark, sync, flow.halves, tStop]);
+  }, [draw, drawSpark, sync, flow.halves, tStop, goals]);
 
   // start when scrolled into view, unless the visitor prefers reduced motion
   useEffect(() => {
@@ -273,11 +301,24 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
   return (
     <div className="flow" ref={wrap} style={css}>
       <div className="flow-score">
-        <div className="side"><span className="nm">{names.us}</span><i style={{ background: "var(--flow-us)" }} /><b>{readout.us}</b></div>
-        <div className="side"><span className="nm">{names.them}</span><i style={{ background: "var(--flow-them)" }} /><b>{readout.them}</b></div>
+        {(["us", "them"] as const).map((side) => (
+          <div className="side" key={side}>
+            <span className="nm">{names[side]}</span>
+            <label className="swatch" style={{ background: `var(--flow-${side})` }} title={`Change ${names[side]}'s colour`}>
+              <input type="color" aria-label={`Colour for ${names[side]}`} value={`#${(side === "us" ? cUs : cThem).map((v) => v.toString(16).padStart(2, "0")).join("")}`} onChange={(e) => pick(side, e.target.value)} />
+            </label>
+            <b key={readout[side]} className={readout[side] > 0 ? "pop" : ""}>{readout[side]}</b>
+          </div>
+        ))}
+        {picked.us || picked.them ? <button className="flow-reset" onClick={() => { pick("us", undefined); pick("them", undefined); }}>Kit colours</button> : null}
       </div>
       <div className="flow-clock"><b>{mm.label}<sup>'</sup></b><span>{mm.half}</span><span className="ontop">{onTop}</span></div>
       <button className="flow-help" onClick={() => setHelp((v) => !v)}>{help ? "Close" : "How to read it"}</button>
+      {readout.goal ? (
+        <div className="flow-goal" key={readout.goal.t} style={{ "--c": `var(--flow-${readout.goal.team})` } as React.CSSProperties}>
+          <span>Goal</span><b>{names[readout.goal.team]}</b><em>{matchMinute(readout.goal.t).label}'</em>
+        </div>
+      ) : null}
       <canvas ref={canvas} className="flow-stage" aria-label={`Animated pitch showing which team was on top through the match. ${names.us} attack to the right.`} />
       {help ? (
         <div className="flow-notes">

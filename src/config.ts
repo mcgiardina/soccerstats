@@ -8,7 +8,9 @@ export const CONFIG = {
   logoUrl: null as string | null,
   pitch: { lengthM: 105, widthM: 68 }, // default; per-game override allowed
   // Seconds of run-up shown before a tagged moment when you jump to it or share it.
-  leadInSeconds: 3,
+  leadInSeconds: 6,
+  // Goals get a longer run-up so you see the move and the finish, not the ball in the net.
+  goalLeadInSeconds: 12,
   // "asa" (ASA xG 3.0, uses shot context) or "soccermatics" (location only). See src/lib/xg.ts.
   xgModel: "asa" as "asa" | "soccermatics",
   // Supabase project. These values are public by design (they ship to every browser);

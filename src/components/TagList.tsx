@@ -43,7 +43,7 @@ export default function TagList(p: Props) {
   const activeId = [...list].reverse().find((t) => t.t_seconds <= p.currentTime + 0.5)?.id ?? null;
 
   async function copyLink(t: Tag) {
-    const ok = await copyText(shareUrl(p.gameId, seekTime(t.t_seconds)));
+    const ok = await copyText(shareUrl(p.gameId, seekTime(t.t_seconds, t.type)));
     p.onToast?.(ok ? "Link copied" : "Copy failed");
   }
 
@@ -67,7 +67,7 @@ export default function TagList(p: Props) {
         const unreviewed = machine && t.confirmed == null;
         return (
           <div key={t.id} className={`tag-row ${unreviewed ? "machine" : ""} ${activeId === t.id ? "active" : ""}`}>
-            <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds))} title="Jump">{mt.label}</span>
+            <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds, t.type))} title="Jump">{mt.label}</span>
             <span className="lbl">
               <span className={`badge ${t.team ?? ""}`}>{names.of(t.team)}</span>
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>

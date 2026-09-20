@@ -22,7 +22,7 @@ export default function FlowDemoPage() {
     <div className="page">
       <h1>Match flow</h1>
       <p className="small muted">ASC Long Beach BU13 1–3 Possible FC BU13 · 20 Sep 2026 · from the fixed wide camera. Machine estimate.</p>
-      {flow ? <FlowField flow={flow} names={{ us: "ASC LB", them: "Possible FC" }} colors={{ us: "#ffffff", them: "#111111" }} goals={GOALS} onSeek={video ? (t) => { player.current?.seek(t); document.getElementById("demo-film")?.scrollIntoView({ behavior: "smooth", block: "center" }); } : undefined} /> : <div className="card small muted">Loading…</div>}
+      {flow ? <FlowField flow={flow} names={{ us: "ASC LB", them: "Possible FC" }} colors={{ us: "#ffffff", them: "#111111" }} goals={GOALS} storageKey="demo" onSeek={video ? (t) => { player.current?.seek(t); document.getElementById("demo-film")?.scrollIntoView({ behavior: "smooth", block: "center" }); } : undefined} /> : <div className="card small muted">Loading…</div>}
       {video ? <div id="demo-film" style={{ marginTop: "1rem" }}><VideoPlayer ref={player} video={video} /></div> : null}
     </div>
   );

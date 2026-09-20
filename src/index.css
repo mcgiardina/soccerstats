@@ -299,13 +299,29 @@ textarea { min-height: 84px; resize: vertical; }
 /* ---- Game page ------------------------------------------------------------- */
 .page.game-page { max-width: 1760px; }
 .game-layout { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-.game-main .player-wrap { width: min(100%, calc((100vh - 230px) * 16 / 9)); margin: 0 auto; }
+.game-main .player-wrap { width: min(100%, calc((100vh - 170px) * 16 / 9)); margin: 0 auto; }
 .player-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #0b1020; border-radius: 22px; overflow: hidden; box-shadow: var(--shadow-lg); }
 .player-wrap iframe, .player-wrap > div, .player-wrap > video { position: absolute; inset: 0; width: 100%; height: 100%; }
 .player-wrap > video { background: #000; object-fit: contain; }
+/* The app's own controls, over the bottom of the video. Shown while paused, on hover and on keyboard
+   focus; they fade while it plays. Inside, the light-page tokens are swapped for on-video ones. */
+.player-wrap > .player-ui { inset: auto 0 0 0; height: auto; z-index: 2; padding: 2.2rem 1rem .7rem; color: #fff; transition: opacity .25s;
+  background: linear-gradient(to top, rgba(4,6,12,.88), rgba(4,6,12,.55) 55%, transparent);
+  --ink: #fff; --muted: rgba(255,255,255,.8); --faint: rgba(255,255,255,.6); --track: rgba(255,255,255,.28); --surface: rgba(10,12,18,.9); --primary: #fff; --on-primary: #10131c; --primary-hover: #e6e8ee; --line-strong: rgba(255,255,255,.25); }
+.player-wrap:not(:hover) > .player-ui.playing:not(:focus-within) { opacity: 0; pointer-events: none; }
+.player-ui .timeline { margin: 0; height: 52px; }
+.player-ui .timeline .track, .player-ui .timeline .played { top: 26px; }
+.player-ui .timeline .period { top: 20px; } .player-ui .timeline .period-lbl { top: 38px; color: rgba(255,255,255,.75); }
+.player-ui .timeline .marker { top: 5px; } .player-ui .timeline .marker.goal { top: 3px; } .player-ui .timeline .playhead { top: 18px; }
+.player-ui .transport { margin-top: 0; }
+.player-ui .btn.icon { background: rgba(255,255,255,.12); border-color: transparent; color: #fff; }
+.player-ui .btn.icon:hover { background: rgba(255,255,255,.24); }
+.player-ui .seg { background: rgba(255,255,255,.12); } .player-ui .seg button { color: rgba(255,255,255,.8); } .player-ui .seg button.on { background: #fff; color: #10131c; }
+.transport-end { display: flex; gap: .35rem; align-items: center; justify-self: end; }
+.player-wrap:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
 .player-wrap > .player-err { inset: auto 0 0 0; height: auto; padding: .7rem 1rem; background: rgba(10,12,18,.85); color: #fff; font-size: .85rem; }
 .player-wrap > .player-err a { color: #fff; text-decoration: underline; }
-.title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1rem; margin: .9rem 0 .25rem; }
+.title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1rem; margin: .2rem 0 .9rem; }
 .title-row h1 { margin: 0; font-size: clamp(1.25rem, 2.2vw, 1.6rem); }
 .title-row .sub { color: var(--muted); font-size: .85rem; margin-top: .15rem; }
 .actions-pills { display: flex; gap: .4rem; flex-wrap: wrap; }
@@ -321,9 +337,10 @@ textarea { min-height: 84px; resize: vertical; }
 .below-span { display: grid; gap: 1rem; }
 @media (min-width: 900px) { .below { grid-template-columns: 1fr 1fr; } .below-span { grid-column: 1 / -1; } }
 @media (min-width: 1000px) {
-  .game-layout { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
-  .game-side { position: sticky; top: 66px; max-height: calc(100vh - 80px); display: flex; }
-  .game-side .side-card { display: flex; flex-direction: column; width: 100%; max-height: 100%; margin: 0; min-height: 0; }
+  /* the events column is exactly as tall as the video beside it, and scrolls inside */
+  .game-layout { grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; }
+  .game-side { position: relative; min-height: 420px; }
+  .game-side .side-card { position: absolute; inset: 0; display: flex; flex-direction: column; margin: 0; min-height: 0; }
   .side-scroll { overflow: auto; min-height: 0; flex: 1; padding-right: 2px; }
 }
 @media (min-width: 1500px) { .game-layout { grid-template-columns: minmax(0, 1fr) 400px; } }
@@ -405,7 +422,19 @@ textarea { min-height: 84px; resize: vertical; }
 .flow-score { position: absolute; top: 1.1rem; left: 1.25rem; display: flex; gap: 1.4rem; pointer-events: none; }
 .flow-score .side { display: grid; gap: .3rem; min-width: 4.2rem; }
 .flow-score .nm { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.7); max-width: 9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.flow-score i { display: block; height: 4px; border-radius: 2px; box-shadow: 0 0 12px currentColor; }
+.flow-score { pointer-events: auto; }
+.flow-score .swatch { display: block; height: 8px; border-radius: 4px; cursor: pointer; position: relative; box-shadow: 0 0 0 1px rgba(255,255,255,.25); transition: height .15s; }
+.flow-score .swatch:hover, .flow-score .swatch:focus-within { height: 12px; box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
+.flow-score .swatch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.flow-score b.pop { animation: flow-pop 1.2s cubic-bezier(.2,1.6,.4,1); }
+@keyframes flow-pop { 0% { transform: scale(1.9); color: #ffd666; } 60% { color: #ffd666; } 100% { transform: scale(1); } }
+.flow-reset { align-self: flex-start; background: none; border: 0; color: rgba(255,255,255,.6); font: 600 .68rem var(--font); text-decoration: underline; cursor: pointer; padding: 0; }
+.flow-goal { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); z-index: 2; pointer-events: none; display: grid; justify-items: center; gap: .1rem; text-align: center; animation: flow-goal 5s ease-out both; }
+.flow-goal span { font-family: var(--display); font-weight: 800; font-size: clamp(2.6rem, 8vw, 5.5rem); line-height: .9; letter-spacing: .02em; text-transform: uppercase; color: #ffd666; text-shadow: 0 0 40px rgba(255,214,102,.55), 0 2px 0 rgba(0,0,0,.5); }
+.flow-goal b { font-size: clamp(.8rem, 1.6vw, 1.05rem); letter-spacing: .16em; text-transform: uppercase; padding: .25rem .7rem; border-radius: var(--pill); background: var(--c); color: #10131c; mix-blend-mode: normal; box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+.flow-goal em { font-style: normal; font-weight: 700; font-size: .8rem; color: rgba(255,255,255,.8); letter-spacing: .1em; }
+@keyframes flow-goal { 0% { opacity: 0; transform: translateX(-50%) scale(.6); } 8% { opacity: 1; transform: translateX(-50%) scale(1.08); } 14% { transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .flow-goal, .flow-score b.pop { animation: none; } }
 .flow-score b { font-family: var(--display); font-weight: 800; font-size: clamp(2.4rem, 6vw, 4rem); line-height: .9; letter-spacing: -.04em; color: rgba(255,255,255,.38); font-variant-numeric: tabular-nums; }
 .flow-clock { position: absolute; top: 3.1rem; right: 1.25rem; display: grid; justify-items: end; gap: .15rem; pointer-events: none; }
 .flow-clock b { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 5vw, 3rem); line-height: 1; color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
@@ -461,7 +490,7 @@ pre.chapters { background: var(--surface-2); border: 1px solid var(--line); bord
 .transport .clock { font-family: var(--display); font-weight: 700; font-size: .95rem; }
 .transport > a { justify-self: end; }
 .transport-btns { display: flex; gap: .35rem; align-items: center; }
-.transport-btns .btn.icon { width: 40px; height: 40px; color: var(--ink); }
+.transport-btns .btn.icon, .transport-end .btn.icon { width: 40px; height: 40px; color: var(--ink); }
 .transport-btns .btn.icon.play { background: var(--primary); border-color: var(--primary); color: var(--on-primary); width: 44px; height: 44px; }
 .transport-btns .btn.icon.play:hover { background: var(--primary-hover); }
 @media (max-width: 560px) {
@@ -507,3 +536,15 @@ pre.chapters { background: var(--surface-2); border: 1px solid var(--line); bord
 .recharts-default-tooltip { background: var(--surface) !important; border: 1px solid var(--line) !important; border-radius: 12px; color: var(--ink) !important; box-shadow: var(--shadow); }
 .recharts-tooltip-label, .recharts-tooltip-item { color: var(--ink) !important; }
 .recharts-cartesian-axis-tick text { fill: var(--muted); }
+
+/* On a phone the video is small: one compact row of controls, the essentials only. */
+@media (max-width: 640px) {
+  .player-wrap > .player-ui { padding: 1.2rem .5rem .35rem; }
+  .player-ui .timeline { height: 34px; } .player-ui .timeline .period-lbl { display: none; }
+  .player-ui .timeline .track, .player-ui .timeline .played { top: 20px; } .player-ui .timeline .period { top: 14px; } .player-ui .timeline .marker { top: 0; } .player-ui .timeline .marker.goal { top: -2px; } .player-ui .timeline .playhead { top: 12px; }
+  .player-ui .transport { grid-template-columns: auto 1fr auto; gap: .3rem; }
+  .player-ui .transport-btns { grid-column: auto; order: 0; justify-content: center; gap: .2rem; }
+  .player-ui .transport .clock { font-size: .75rem; }
+  .player-ui .btn.icon, .player-ui .transport-btns .btn.icon.play { width: 32px; height: 32px; }
+  .player-ui .transport-btns .btn.icon:first-child, .player-ui .transport-btns .btn.icon:last-child, .player-ui .transport-end a.btn, .player-ui .transport-end .seg { display: none; }
+}

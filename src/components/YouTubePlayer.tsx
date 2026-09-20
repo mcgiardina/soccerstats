@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from "react";
 
 // Minimal typing for the YouTube IFrame Player API.
 interface YTPlayer {
@@ -8,6 +8,9 @@ interface YTPlayer {
   playVideo(): void;
   pauseVideo(): void;
   getPlayerState(): number;
+  mute(): void;
+  unMute(): void;
+  isMuted(): boolean;
   destroy(): void;
 }
 interface YTNamespace {
@@ -38,6 +41,17 @@ export interface PlayerHandle {
   currentTime(): number;
   togglePlay(): void;
   nudge(delta: number): void;
+  /** returns the new muted state */
+  toggleMute(): boolean;
+  fullscreen(): void;
+}
+
+/** Full screen for the whole player box, so the app's own controls come along. */
+export function toggleFullscreen(box: HTMLElement | null, video?: HTMLVideoElement | null) {
+  if (!box) return;
+  if (document.fullscreenElement) { void document.exitFullscreen(); return; }
+  if (box.requestFullscreen) void box.requestFullscreen().catch(() => {});
+  else (video as unknown as { webkitEnterFullscreen?: () => void } | null)?.webkitEnterFullscreen?.();   // iPhone
 }
 
 interface Props {
@@ -45,10 +59,13 @@ interface Props {
   startAt?: number;
   onTime?: (t: number) => void;
   onDuration?: (d: number) => void;
+  onPlaying?: (playing: boolean) => void;
+  /** the app's controls, drawn over the bottom of the video; YouTube's own bar is then hidden */
+  children?: ReactNode;
 }
 
 const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
-  { youtubeId, startAt, onTime, onDuration }, ref,
+  { youtubeId, startAt, onTime, onDuration, onPlaying, children }, ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -58,6 +75,9 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
   const onDurRef = useRef(onDuration);
   onTimeRef.current = onTime;
   onDurRef.current = onDuration;
+  const onPlayingRef = useRef(onPlaying);
+  onPlayingRef.current = onPlaying;
+  const chromeless = !!children;
 
   useEffect(() => {
     let cancelled = false;
@@ -70,8 +90,9 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
       if (cancelled) return;
       playerRef.current = new YT.Player(mount, {
         videoId: youtubeId,
-        playerVars: { rel: 0, modestbranding: 1, playsinline: 1, start: startAt ? Math.floor(startAt) : undefined },
+        playerVars: { rel: 0, modestbranding: 1, playsinline: 1, controls: chromeless ? 0 : 1, fs: chromeless ? 0 : 1, start: startAt ? Math.floor(startAt) : undefined },
         events: {
+          onStateChange: (e: { data: number }) => onPlayingRef.current?.(e.data === 1 || e.data === 3),
           onReady: () => {
             readyRef.current = true;
             const d = playerRef.current?.getDuration() ?? 0;
@@ -127,9 +148,16 @@ const YouTubePlayer = forwardRef<PlayerHandle, Props>(function YouTubePlayer(
       if (!p) return;
       p.seekTo(Math.max(0, p.getCurrentTime() + delta), true);
     },
+    toggleMute() {
+      const p = playerRef.current;
+      if (!p) return false;
+      if (p.isMuted()) { p.unMute(); return false; }
+      p.mute(); return true;
+    },
+    fullscreen() { toggleFullscreen(hostRef.current?.parentElement ?? null); },
   }));
 
-  return <div className="player-wrap"><div ref={hostRef} /></div>;
+  return <div className="player-wrap"><div ref={hostRef} />{children}</div>;
 });
 
 export default YouTubePlayer;

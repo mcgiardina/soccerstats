@@ -92,6 +92,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const [playId, setPlayId] = useState<string | null>(null);
   const resumeAt = useRef<number | null>(null);
   const [flowUrl, setFlowUrl] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
   useEffect(() => { let on = true; if (ready && id) api.getFlow(id).then((f) => { if (on) setFlow(f); }); return () => { on = false; }; }, [ready, id, isAdmin]);
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
@@ -221,69 +223,59 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   return (
     <div className="page game-page" style={kitVars(g.kit_color, g.opp_kit_color, theme.resolved)}>
       {toast ? <div className="toast">{toast}</div> : null}
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: ".6rem" }}>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: ".2rem" }}>
         <Link to="/" className="crumb">← Season</Link>
         {!g.published ? <span className="badge draft">draft · only admins can see this</span> : null}
+      </div>
+      <div className="title-row">
+        <div>
+          <h1>{usFirst ? `${team.shortName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
+          <div className="sub">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
+        </div>
+        <div className="actions-pills">
+          {video ? <button className="btn" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>↗ Share</button> : null}
+          {show("report") ? <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link> : null}
+          {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
+          {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
+        </div>
       </div>
 
       <div className="game-layout">
         <div className="game-main">
           {video ? (
-            <>
-              <VideoPlayer key={playing!.id} ref={player} video={playing!} startAt={resumeAt.current ?? startAt} onTime={setCurrent} onDuration={setDuration} />
-              <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={show("tags") ? visibleTags : []} onSeek={seek} />
-              <div className="transport">
-                <span className="mono clock">{toMatchTime(video, current).label}</span>
-                <div className="transport-btns" role="group" aria-label="Playback">
-                  <button className="btn icon" title="Back 30 seconds (shift+←)" onClick={() => player.current?.nudge(-30)}><SkipIcon dir="back" n={30} /></button>
-                  <button className="btn icon" title="Back 5 seconds (←)" onClick={() => player.current?.nudge(-5)}><SkipIcon dir="back" n={5} /></button>
-                  <button className="btn icon play" title="Play / pause (space)" onClick={() => player.current?.togglePlay()}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
-                  </button>
-                  <button className="btn icon" title="Forward 5 seconds (→)" onClick={() => player.current?.nudge(5)}><SkipIcon dir="fwd" n={5} /></button>
-                  <button className="btn icon" title="Forward 30 seconds (shift+→)" onClick={() => player.current?.nudge(30)}><SkipIcon dir="fwd" n={30} /></button>
-                </div>
-                <div className="row" style={{ gap: ".6rem", alignItems: "center" }}>
-                  {watchable.length > 1 ? (
-                    <div className="seg" role="group" aria-label="Video source" title="Same recording, two hosts. Tag times follow the first source.">
-                      {watchable.map((v) => <button key={v.id} className={v.id === playing!.id ? "on" : ""} onClick={() => { resumeAt.current = player.current?.currentTime() ?? current; setPlayId(v.id); }}>{providerLabel(v)}</button>)}
-                    </div>
-                  ) : null}
-                  {openUrl(playing!, current) ? <a className="small muted" href={openUrl(playing!, current)!} target="_blank" rel="noreferrer">Open on {providerLabel(playing!)} ↗</a> : null}
-                </div>
-              </div>
-              <div className="title-row">
-                <div>
-                  <h1>{usFirst ? `${team.shortName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
-                  <div className="sub">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
-                </div>
-                <div className="actions-pills">
-                  <button className="btn" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>↗ Share</button>
-                  {show("report") ? <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link> : null}
-                  {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
-                  {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
-                </div>
-              </div>
-              {admin ? (
-                <details className="keys-details">
-                  <summary>Tagging keys</summary>
-                  <div className="keys" style={{ marginTop: ".4rem" }}>
-                    {HOTKEYS.map((h) => <span key={h.key}><kbd>{h.key}</kbd> <span className="tiny">{TAG_LABELS[h.type]}</span></span>)}
-                    <span><kbd>⇧</kbd> <span className="tiny">+key = {names.them}</span></span>
-                    <span><kbd>space</kbd> <span className="tiny">play/pause</span></span>
-                    <span><kbd>←</kbd><kbd>→</kbd> <span className="tiny">±5s (⇧ ±30s)</span></span>
+            <VideoPlayer key={playing!.id} ref={player} video={playing!} startAt={resumeAt.current ?? startAt} onTime={setCurrent} onDuration={setDuration} onPlaying={setIsPlaying}>
+              <div className={`player-ui ${isPlaying ? "playing" : ""}`}>
+                <Timeline video={video} duration={duration || video.duration_seconds || 1} current={current} tags={show("tags") ? visibleTags : []} onSeek={seek} />
+                <div className="transport">
+                  <span className="mono clock">{toMatchTime(video, current).label}</span>
+                  <div className="transport-btns" role="group" aria-label="Playback">
+                    <button className="btn icon" title="Back 30 seconds (shift+←)" onClick={() => player.current?.nudge(-30)}><SkipIcon dir="back" n={30} /></button>
+                    <button className="btn icon" title="Back 5 seconds (←)" onClick={() => player.current?.nudge(-5)}><SkipIcon dir="back" n={5} /></button>
+                    <button className="btn icon play" title="Play / pause (space)" aria-label={isPlaying ? "Pause" : "Play"} onClick={() => player.current?.togglePlay()}>
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">{isPlaying ? <path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" /> : <path d="M8 5v14l11-7z" fill="currentColor" />}</svg>
+                    </button>
+                    <button className="btn icon" title="Forward 5 seconds (→)" onClick={() => player.current?.nudge(5)}><SkipIcon dir="fwd" n={5} /></button>
+                    <button className="btn icon" title="Forward 30 seconds (shift+→)" onClick={() => player.current?.nudge(30)}><SkipIcon dir="fwd" n={30} /></button>
                   </div>
-                </details>
-              ) : null}
-            </>
+                  <div className="transport-end">
+                    {watchable.length > 1 ? (
+                      <div className="seg" role="group" aria-label="Video source" title="Same recording, two hosts. Tag times follow the first source.">
+                        {watchable.map((v) => <button key={v.id} className={v.id === playing!.id ? "on" : ""} onClick={() => { resumeAt.current = player.current?.currentTime() ?? current; setPlayId(v.id); }}>{providerLabel(v)}</button>)}
+                      </div>
+                    ) : null}
+                    {openUrl(playing!, current) ? <a className="btn icon" href={openUrl(playing!, current)!} target="_blank" rel="noreferrer" title={`Open on ${providerLabel(playing!)}`} aria-label={`Open on ${providerLabel(playing!)}`}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg></a> : null}
+                    <button className="btn icon" title={muted ? "Unmute" : "Mute"} aria-label={muted ? "Unmute" : "Mute"} onClick={() => setMuted(player.current?.toggleMute() ?? false)}>
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" stroke="none" />{muted ? <path d="M17 9l5 6M22 9l-5 6" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />}</svg>
+                    </button>
+                    <button className="btn icon" title="Full screen" aria-label="Full screen" onClick={() => player.current?.fullscreen()}>
+                      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </VideoPlayer>
           ) : (
             <div className="card">
-              <h1 style={{ marginBottom: ".25rem" }}>{usFirst ? `${team.shortName} ${scoreText} ` : ""}{g.opponent}{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
-              <div className="actions-pills" style={{ marginBottom: "1rem" }}>
-                <Link className="btn" to={`/${admin ? "games" : "g"}/${g.id}/report`}>▤ Report card</Link>
-                {admin ? <button className={`btn ${g.published ? "" : "accent"}`} onClick={togglePublish}>{g.published ? "Unpublish" : "Publish"}</button> : null}
-                {admin ? <button className="btn" onClick={() => setEditGame(true)}>Edit</button> : null}
-              </div>
               <h2>No video yet</h2>
               {admin ? (
                 <div className="row"><input type="url" placeholder="Paste a YouTube or BallerCam link" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} style={{ flex: 1 }} />
@@ -361,9 +353,21 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         </aside>
       </div>
 
+      {admin && video ? (
+        <details className="keys-details">
+          <summary>Tagging keys</summary>
+          <div className="keys" style={{ marginTop: ".4rem" }}>
+            {HOTKEYS.map((h) => <span key={h.key}><kbd>{h.key}</kbd> <span className="tiny">{TAG_LABELS[h.type]}</span></span>)}
+            <span><kbd>⇧</kbd> <span className="tiny">+key = {names.them}</span></span>
+            <span><kbd>space</kbd> <span className="tiny">play/pause</span></span>
+            <span><kbd>←</kbd><kbd>→</kbd> <span className="tiny">±5s (⇧ ±30s)</span></span>
+          </div>
+        </details>
+      ) : null}
+
       {flow && show("momentum") ? (
         <div style={{ marginTop: "1rem" }}>
-          <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} onSeek={seek}
+          <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} storageKey={g.id} onSeek={(t) => { seek(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed || (admin && t.confirmed == null))).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
         </div>
       ) : null}
@@ -395,7 +399,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
           {mapMode === "shots" || !show("passes") ? (
             <>
-              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds)); }} />
+              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds, t.type)); }} />
               <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. {names.us} attack →, {names.them} attack ←.</div>
             </>
           ) : (

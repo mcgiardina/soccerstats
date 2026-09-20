@@ -51,7 +51,7 @@ export default function Timeline({ video, duration, current, tags, onSeek, activ
           className={`marker ${t.team ?? "none"} ${t.type === "goal" ? "goal" : ""} ${t.source === "machine" && !t.confirmed ? "machine" : ""}`}
           style={{ left: pct(t.t_seconds), outline: activeTagId === t.id ? "2px solid var(--ink)" : undefined }}
           title={`${fmtClock(t.t_seconds)} ${t.type}${t.team ? " · " + t.team : ""}`}
-          onPointerDown={(e) => { e.stopPropagation(); onSeek(seekTime(t.t_seconds)); }}
+          onPointerDown={(e) => { e.stopPropagation(); onSeek(seekTime(t.t_seconds, t.type)); }}
         />
       ))}
       <div className="playhead" style={{ left: pct(current) }} />
