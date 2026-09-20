@@ -22,10 +22,13 @@ from . import fieldmap, kickoffs
 NX, NY = 20, 10
 
 
-def halves(rows, restart_list, min_share=0.35, smooth_s=60.0, min_half_s=1200.0):
-    """[(t_start, t_end, light_side), ...] in the rows' clock. A half starts at a restart (the second
-    one is the first restart with the sides swapped) and ends when the pitch first empties (players
-    warming up before the second half must not count as play)."""
+def halves(rows, restart_list, x_mid=None, y_range=None, min_share=0.35, smooth_s=60.0, min_break_s=180.0, min_half_s=1200.0, walk_off_s=12.0):
+    """[(kick_off, end, light_side), ...] in the rows' clock.
+
+    Half time is read the way a person would: the stretch where the players are off the pitch for
+    3+ minutes. The first half ends where that break starts; the second half starts at the first
+    kick-off line-up after it (at the moment the kick is taken, see kickoffs.kick_time). The first
+    half starts at the first line-up of the recording; the game ends when the pitch empties again."""
     if not restart_list:
         return []
     ts = np.array([r["t"] for r in rows])
@@ -33,15 +36,39 @@ def halves(rows, restart_list, min_share=0.35, smooth_s=60.0, min_half_s=1200.0)
     k = max(1, int(smooth_s / max(np.median(np.diff(ts)), 1e-6)))
     sm = np.convolve(n, np.ones(k) / k, mode="same")
     first = restart_list[0]
-    second = next((r for r in restart_list[1:] if r["light_side"] != first["light_side"]), None)
-    out = []
-    for start, stop in ((first, second["t"] if second else ts[-1]), (second, ts[-1])):
-        if start is None:
-            continue
-        m = (ts >= start["t"]) & (ts < stop)
-        full = np.median(sm[m])
-        empty = ts[m][(sm[m] < min_share * full) & (ts[m] > start["t"] + min_half_s)]
-        out.append((float(start["t"]), float(empty[0] if len(empty) else ts[m][-1]), start["light_side"]))
+    full = np.median(sm[ts >= first["t"]])
+    empty = sm < min_share * full
+    # runs of "empty pitch" after the first half could have been played
+    breaks, i = [], 0
+    while i < len(ts):
+        if empty[i]:
+            j = i
+            while j + 1 < len(ts) and empty[j + 1]:
+                j += 1
+            if ts[j] - ts[i] >= min_break_s and ts[i] > first["t"] + min_half_s:
+                breaks.append((float(ts[i]), float(ts[j])))
+            i = j + 1
+        else:
+            i += 1
+    def whistle(t_empty):
+        """The smoothed count lags: step back to the last sample that still had half the players on."""
+        i = int(np.searchsorted(ts, t_empty))
+        lo = max(0, i - 2 * k)
+        busy = np.where(n[lo:i + 1] >= 0.5 * full)[0]
+        # players need ~10-15 s to walk off after the whistle (first real game: 50:37 by this rule,
+        # ~50:20 on the film), so lean a little early
+        return float(ts[min(len(ts) - 1, lo + busy[-1] + 1)] - walk_off_s) if len(busy) else float(t_empty)
+
+    kick = (lambda r: kickoffs.kick_time(rows, r, x_mid, y_range)) if x_mid is not None else (lambda r: r["t"])
+    if not breaks:
+        return [(kick(first), float(ts[-1]), first["light_side"])]
+    ht0, ht1 = breaks[0]
+    second = next((r for r in restart_list if r["t"] >= ht0), None)
+    out = [(kick(first), whistle(ht0), first["light_side"])]
+    if second is not None:
+        after = ts > second["t"] + min_half_s
+        gone = ts[after & empty]
+        out.append((kick(second), whistle(gone[0]) if len(gone) else float(ts[-1]), second["light_side"]))
     return out
 
 
@@ -127,7 +154,7 @@ if __name__ == "__main__":
     a = ap.parse_args()
     rows = json.load(open(a.people)); c = json.load(open(a.camera))
     rs = kickoffs.restarts(rows, c["x_mid"], c["y_range"])
-    hl = halves(rows, rs)
+    hl = halves(rows, rs, c["x_mid"], c["y_range"])
     att = []
     if a.cands:
         for k in json.load(open(a.cands)):

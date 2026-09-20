@@ -84,7 +84,7 @@ export default function NewGamePage() {
               {src.game && sides ? (
                 <div className="muted" style={{ marginTop: ".3rem" }}>
                   Filled in below from the camera: {sides.us.name} {sides.us.score ?? "–"}–{sides.them.score ?? "–"} {sides.them.name}
-                  {src.video.kickoff_offset_seconds ? `, kick-off at ${fmtClock(src.video.kickoff_offset_seconds)}` : ""}
+                  {src.video.kickoff_offset_seconds ? `, clock started at ${fmtClock(src.video.kickoff_offset_seconds)} (the scoreboard's start, often before the real kick-off)` : ""}
                   {src.video.raw_url ? ". The full-field recording is attached for analysis." : "."}
                 </div>
               ) : <div className="muted">Duration is read from the player once you open the game.</div>}

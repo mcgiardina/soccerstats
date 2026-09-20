@@ -164,7 +164,16 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   }
 
   async function importFlow(load: () => Promise<unknown>) {
-    try { const data = (await load()) as FlowData; await api.saveFlow(id, data); setFlow(data); setFlowUrl(""); showToast("Match flow attached"); }
+    try {
+      const data = (await load()) as FlowData; await api.saveFlow(id, data); setFlow(data); setFlowUrl("");
+      // The flow knows the halves (kick-offs from the line-ups, half time from the 3+ minute empty
+      // pitch). Use them for the periods unless someone has already set half time by hand.
+      const [h1, h2] = data.halves ?? [];
+      if (video && h1 && video.halftime_offset_seconds == null) {
+        await api.updateVideo(video.id, { kickoff_offset_seconds: Math.round(h1[0]), halftime_offset_seconds: Math.round(h1[1]), second_half_offset_seconds: h2 ? Math.round(h2[0]) : null, fulltime_offset_seconds: h2 ? Math.round(h2[1]) : null });
+        await reload(); showToast("Match flow attached · periods set from it");
+      } else showToast("Match flow attached");
+    }
     catch (e) { showToast(e instanceof Error ? e.message : "Couldn't import that"); }
   }
 

@@ -58,6 +58,28 @@ def restarts(rows, x_mid, y_range, window_s=10.0, min_purity=0.9, min_samples=3,
     return out
 
 
+def kick_time(rows, restart, x_mid, y_range, hold=0.8, max_wait_s=150.0):
+    """When the kick-off was actually TAKEN. restart["t"] is when the teams had lined up in their own
+    halves, which for the start of a half is 30-60 s before the whistle; the kick is the moment the
+    line-up breaks: the last sample with purity >= 0.8 before two in a row fall below it.
+    First real game: 15:33 and 57:16 against 15:32 and 57:12 read off the film. (The camera's own
+    scoreboard said 13:10: that is when someone pressed start, with one person on the pitch.)"""
+    last, low = restart["t"], 0
+    for r in rows:
+        if r["t"] < restart["t"] or r["t"] > restart["t"] + max_wait_s:
+            continue
+        pu, _ = split_purity(r["p"], x_mid, y_range)
+        if not np.isfinite(pu):
+            continue
+        if pu >= hold:
+            last, low = r["t"], 0
+        else:
+            low += 1
+            if low >= 2:
+                break
+    return float(last)
+
+
 def nominate(rows, x_mid, y_range, window_s=8.0, min_purity=0.8, min_samples=2, min_gap_s=40.0):
     """Loose first stage for restarts taken quickly: times worth re-sampling densely (2 fps, with a
     zoomed pass on the far side) and judging with own_half_restarts. Covers every true restart of
