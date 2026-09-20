@@ -118,6 +118,24 @@ def main() -> int:
     run = {"id": "dry-run"} if args.dry_run else db.claim_run(args.game_id, main_video["id"], MODEL_VERSION, params)
     print(f"run {run['id']} started for game {args.game_id}")
 
+    # A game whose camera kept its full-field recording, and for which a calibration exists, is
+    # analysed from that fixed view: on the first real game the panned film gave 0 of 4 goals
+    # (painted hash marks read as the ball) and the fixed view 4 of 4.
+    if wide and wide.get("raw_url"):
+        from analyzer import fixedgame
+        if fixedgame.calibration(wide, args.game_id):
+            try:
+                return fixedgame.main(game, main_video, wide, run, args)
+            except Exception as e:  # noqa: BLE001
+                import traceback
+                tb = traceback.format_exc()
+                print(tb, file=sys.stderr)
+                if not args.dry_run:
+                    db.update_run_params(run["id"], {"error_detail": tb[-3000:]})
+                    db.finish_run(run["id"], "failed", f"{type(e).__name__}: {e}"[:1500])
+                return 1
+        print("wide source has no calibration under calib/fixed/: using the panned film")
+
     try:
         cache_path = os.path.join(fetch.CACHE, f"{args.game_id}_dets.json.gz")
         if args.from_cache and os.path.exists(cache_path):

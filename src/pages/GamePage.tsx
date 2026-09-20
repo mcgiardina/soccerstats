@@ -25,10 +25,26 @@ import { useTheme } from "../lib/theme";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { summarizeGame, trustedTags } from "../lib/stats";
-import { fmtDate, seekTime, toMatchTime } from "../lib/time";
+import { fmtClock, fmtDate, seekTime, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
 import { openUrl, providerLabel, resolveSource } from "../lib/sources";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
+
+/** What a wide-camera run found, and how it did against the goals already on the game. */
+function FixedRunSummary({ run }: { run: import("../lib/types").StatRun }) {
+  const f = run.params?.fixed as undefined | {
+    minutes?: number; clock_offset_s?: number; goals?: { t: number; team: string | null }[];
+    compare?: { known_goals?: { known_t: number; found: boolean; dt_s: number | null; team_right: boolean }[]; machine_goals_with_no_known_goal?: number[] };
+  };
+  if (!f) return null;
+  const known = f.compare?.known_goals ?? [], extra = f.compare?.machine_goals_with_no_known_goal ?? [];
+  const found = known.filter((k) => k.found);
+  return (
+    <div className="tiny muted" style={{ gridColumn: "1 / -1", marginTop: ".1rem" }}>
+      Wide camera · {f.goals?.length ?? 0} goals found in {f.minutes ?? "?"} min{known.length ? <> · against the {known.length} goals already on this game: <strong>{found.length} found</strong>, {found.filter((k) => k.team_right).length} with the right team{found.length ? `, off by ${found.map((k) => `${k.dt_s! > 0 ? "+" : ""}${k.dt_s}s`).join(", ")}` : ""}{known.length - found.length ? ` · missed ${known.filter((k) => !k.found).map((k) => fmtClock(k.known_t)).join(", ")}` : ""}</> : null}{extra.length ? ` · ${extra.length} with no known goal nearby (${extra.map((t) => fmtClock(t)).join(", ")})` : " · no extra goals"}
+    </div>
+  );
+}
 
 function PassThirds({ passes, names }: { passes: import("../lib/types").PassEvent[]; names: { us: string; them: string } }) {
   const located = passes.filter((p) => p.third);
@@ -324,7 +340,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               ) : null}
               {panel === "analysis" ? (
                 <div>
-                  <p className="small muted">Nothing runs on its own. Queue a run here and the Mac mini worker picks it up within a minute (about an hour per game). It tells the teams apart by the kit colour set on this game{g.kit_color ? "" : " (none set: the team colour is used)"}.</p>
+                  <p className="small muted">Nothing runs on its own. Queue a run here and the Mac mini worker picks it up within a minute (an hour or two per game). When the camera's full-field recording is attached, goals, half times and the match flow come from that wide view. It tells the teams apart by the kit colour set on this game{g.kit_color ? "" : " (none set: the team colour is used)"}.</p>
                   <div className="row" style={{ alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <span className="small muted">Kits:</span>
                     <span className="badge us">{names.us}</span><span className="small mono">{g.kit_color || "team colour"}</span>
@@ -338,7 +354,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                         <div key={r.id} className="tag-row small">
                           <span className="mono">{r.id.slice(0, 8)}</span>
                           <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
-                          <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.error ? ` · ${r.error}` : ""}</span>
+                          <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.status === "running" && typeof r.params?.stage === "string" ? ` · ${r.params.stage}` : ""}{r.error ? ` · ${r.error}` : ""}</span>
+                          <FixedRunSummary run={r} />
                         </div>
                       ))}
                     </div>

@@ -1,0 +1,50 @@
+{
+ "cam": {
+  "f": 1467.5251808440823,
+  "k": -0.09618423171530469,
+  "tilt": 0.2657654732901747,
+  "yaw": 0.019036340315122826,
+  "roll": -0.0022165453642788106,
+  "cx": -0.5461549241490677,
+  "d": 14.691532010722568,
+  "h": 12.76508248962561
+ },
+ "size": [
+  3840,
+  2160
+ ],
+ "field": [
+  -138.78821990953873,
+  145.3454228871602,
+  0.0,
+  202.9870846464309
+ ],
+ "x_mid": 1905,
+ "y_range": [
+  730,
+  1560
+ ],
+ "goals": {
+  "left": [
+   564,
+   859,
+   709,
+   961
+  ],
+  "right": [
+   3083,
+   837,
+   3217,
+   933
+  ]
+ },
+ "band": [
+  700,
+  1660
+ ],
+ "far_band": [
+  700,
+  1000
+ ],
+ "note": "ASC LB v Possible FC, Cabrillo HS, 2026-09-20. BallerCam panoramic 3840x2160, tripod near halfway. Camera fitted from the football yard lines and numerals (fieldmap.fit); goals and halfway line picked by hand."
+}

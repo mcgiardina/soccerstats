@@ -194,3 +194,15 @@ share page reads (`www.ballertv.com/api/ballercam_web/streams/<slug>`, CORS `*`)
 in the app with hls.js), the raw full-field `.mov` (stored as the `wide_fixed` source), team names, kit
 colours, score, kick-off and scoreboard goals. `fetch.download_video(row)` downloads either kind; the old
 homography path skips a raw camera file rather than pulling 9 GB.
+
+## Running a wide-camera game on the worker
+
+`analyzer/fixedgame.py` is the whole fixed-view pipeline as one queued run. `analyze.py` takes that path
+when the game has a `wide_fixed` video with a `raw_url` AND a calibration exists under
+`calib/fixed/<provider_ref or game id>.json` (goal boxes, halfway line, pitch band, camera model). It
+downloads the raw file once (resumable, deleted afterwards), matches the clocks by audio, makes one pass
+(ball tracker at both goals on every frame + players every 2 s), re-samples the nominated windows, and
+writes goal proposals, `game_flow`, the periods (if unset) and `params.fixed.compare`: how its goals line
+up with the goals already on the game. Only its own earlier proposals are replaced; scoreboard goals and
+human tags are left alone. Line-ups that never break into play (warm-ups) are not kick-offs.
+A new venue or tripod spot needs a new calibration file; that step is still by hand.

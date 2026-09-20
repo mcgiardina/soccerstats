@@ -7,5 +7,7 @@ scikit-learn>=1.5
 supabase>=2.6
 python-dotenv>=1.0
 tqdm>=4.66
+# audio of two recordings of one game, to match their clocks (analyzer/clocks.py)
+av>=12
 # YOLO-World text prompts (built once by get_weights.sh)
 git+https://github.com/ultralytics/CLIP.git
