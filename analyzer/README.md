@@ -148,3 +148,25 @@ automatically. This is what unlocks referee/keeper exclusion by class, real shot
 Honesty: the BallerCam upload is an AI-panned crop that keeps the ball centred, so the
 ball's pixel position says nothing about field position. Everything positional goes through the homography or is skipped.
 No per-player data is ever persisted, including tracker IDs.
+
+## Match flow for the momentum graphic (fixed wide view)
+
+`analyzer/fieldmap.py` is a fisheye camera model fitted from landmarks with known field positions. On a
+football-lined pitch the yard lines and numerals are ideal (exactly 15 / 30 ft apart): 16 landmarks on the
+first real game fit to a median of 6 px, and players then land on a ~290 x 200 ft rectangle. The BallerCam
+app's camera figures are soft priors only.
+
+`analyzer/flow.py` turns the people rows (the same ones `kickoffs.py` uses) into the series the app's
+`FlowField` animates: per 15 s, a density grid of where the players are, the seam (midpoint between the two
+teams' centres of mass, per lateral band) and one momentum number. Everything is turned so we attack right
+in both halves, and times are in the watched video's clock (`clocks.py` gives the offset). Halves come
+from the kickoff restarts and end when the pitch first empties.
+
+Check on the first real game: in the two minutes before each of the four goals the momentum swung to the
+scoring side (-0.7, -0.5 from +1.0, +1.0, -0.9), and the attack candidates split 93 v 53 in a 1-3 loss.
+It is a territory estimate, not possession.
+
+    python -m analyzer.flow people.json camera.json --cands cands.json --offset 21.2 -o flow.json
+
+The result goes in the `game_flow` table (`data` jsonb, one row per game). `/flow-demo` in the app shows the
+first real game from `public/demo/flow.json` until that game has a page of its own.

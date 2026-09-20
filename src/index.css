@@ -393,6 +393,36 @@ textarea { min-height: 84px; resize: vertical; }
 .legend { font-size: .74rem; color: var(--muted); }
 .legend .m { color: var(--machine); }
 
+/* Match flow: a dark stage in both themes, like the video player above it. */
+.flow { position: relative; border-radius: var(--radius); overflow: hidden; color: #eef0f4; isolation: isolate;
+  background: radial-gradient(120% 90% at 50% 55%, #161b26 0%, #0b0d13 62%, #07080c 100%); }
+.flow::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: .5;
+  background: radial-gradient(40% 50% at 18% 30%, color-mix(in oklab, var(--flow-us) 22%, transparent), transparent 70%), radial-gradient(40% 50% at 84% 70%, color-mix(in oklab, var(--flow-them) 22%, transparent), transparent 70%); }
+.flow-stage { display: block; width: 100%; height: clamp(320px, 52vw, 560px); letter-spacing: .08em; }
+.flow-score { position: absolute; top: 1.1rem; left: 1.25rem; display: flex; gap: 1.4rem; pointer-events: none; }
+.flow-score .side { display: grid; gap: .3rem; min-width: 4.2rem; }
+.flow-score .nm { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.7); max-width: 9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-score i { display: block; height: 4px; border-radius: 2px; box-shadow: 0 0 12px currentColor; }
+.flow-score b { font-family: var(--display); font-weight: 800; font-size: clamp(2.4rem, 6vw, 4rem); line-height: .9; letter-spacing: -.04em; color: rgba(255,255,255,.38); font-variant-numeric: tabular-nums; }
+.flow-clock { position: absolute; top: 3.1rem; right: 1.25rem; display: grid; justify-items: end; gap: .15rem; pointer-events: none; }
+.flow-clock b { font-family: var(--display); font-weight: 800; font-size: clamp(2rem, 5vw, 3rem); line-height: 1; color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
+.flow-clock sup { font-size: .45em; margin-left: .1em; }
+.flow-clock span { font-size: .62rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.45); }
+.flow-clock .ontop { color: rgba(255,255,255,.8); margin-top: .35rem; }
+.flow-help { position: absolute; top: 1rem; right: 1.25rem; z-index: 3; background: none; border: 0; padding: .2rem 0; cursor: pointer; font: 600 .78rem var(--font); color: rgba(255,255,255,.7); text-decoration: underline; text-underline-offset: 3px; }
+.flow-help:hover { color: #fff; }
+.flow-notes { position: absolute; z-index: 2; right: 1.25rem; top: 8.6rem; width: min(21rem, calc(100% - 2.5rem)); padding: .9rem 1rem; border-radius: var(--radius-sm); background: rgba(10,12,18,.82); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.1); font-size: .8rem; line-height: 1.45; }
+.flow-notes p { margin: 0 0 .55rem; color: rgba(255,255,255,.78); } .flow-notes p:last-child { margin: 0; } .flow-notes b { color: #fff; } .flow .dim { color: rgba(255,255,255,.45); }
+.flow-bar { display: flex; align-items: center; gap: .9rem; padding: 0 1.25rem 1.1rem; margin-top: -1.2rem; position: relative; }
+.flow-play { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center; background: rgba(255,255,255,.16); color: #fff; transition: background .2s, transform .2s; }
+.flow-play svg { fill: currentColor; } .flow-play:hover { background: rgba(255,255,255,.26); transform: scale(1.05); }
+.flow-spark { flex: 1; min-width: 0; }
+.flow-spark .lbl { display: flex; justify-content: space-between; font-size: .68rem; font-weight: 700; letter-spacing: .04em; margin-bottom: .25rem; }
+.flow-spark canvas { display: block; width: 100%; height: 44px; cursor: ew-resize; touch-action: none; }
+.flow-watch { flex: none; border: 1px solid rgba(255,255,255,.22); background: none; color: #fff; border-radius: var(--pill); padding: .45rem .9rem; font: 600 .78rem var(--font); cursor: pointer; }
+.flow-watch:hover { background: rgba(255,255,255,.1); }
+@media (max-width: 640px) { .flow-watch { display: none; } .flow-notes { top: 2.9rem; left: 1.25rem; width: auto; } }
+
 .momentum { display: flex; gap: 3px; align-items: flex-end; height: 48px; }
 .momentum .b { flex: 1; background: var(--accent); border-radius: 3px 3px 1px 1px; min-width: 4px; transition: height .3s; }
 .momentum .b.them { background: var(--them-soft); }

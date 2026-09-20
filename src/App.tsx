@@ -9,6 +9,7 @@ import SettingsPage from "./pages/SettingsPage";
 import CoachPage from "./pages/CoachPage";
 import { TeamProvider } from "./lib/team";
 import ReportPage from "./pages/ReportPage";
+import FlowDemoPage from "./pages/FlowDemoPage";
 import { useAuth } from "./lib/auth";
 import { supabaseConfigured } from "./lib/supabase";
 
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/opponents/:name" element={<OpponentPage />} />
         <Route path="/settings" element={<RequireAdmin><SettingsPage /></RequireAdmin>} />
         <Route path="/coach" element={<CoachPage />} />
+        <Route path="/flow-demo" element={<FlowDemoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -123,6 +123,21 @@ export interface StatBucket {
   turnovers_them: number | null;
 }
 
+/** Match flow from the fixed wide camera (analyzer/flow.py). Times are video seconds; we attack right. */
+export interface FlowData {
+  v: number;
+  step: number;
+  t0: number;
+  n: number;
+  nx: number;
+  ny: number;
+  halves: [number, number][];
+  h: string;      // base64 uint8 [n][ny][nx]: where the players are
+  seam: string;   // base64 uint8 [n][ny]: the front between the teams, 0..255 along the pitch
+  m: number[];    // -1..1, + = us on top
+  attacks: { t: number; team: Team; score: number }[];
+}
+
 export interface ShapeSnapshot {
   id: string;
   game_id: string;

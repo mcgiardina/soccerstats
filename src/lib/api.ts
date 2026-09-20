@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import type {
-  Game, GameBundle, Shot, StatBucket, StatRun, Tag, TeamStats, Video, ShapeSnapshot, PassEvent,
+  Game, GameBundle, Shot, StatBucket, StatRun, Tag, TeamStats, Video, ShapeSnapshot, PassEvent, FlowData,
 } from "./types";
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -19,6 +19,12 @@ export async function listGames(): Promise<GameRow[]> {
     .order("played_on", { ascending: false })
     .order("created_at", { ascending: false });
   return unwrap(res) as GameRow[];
+}
+
+/** Flow for the momentum graphic. Loaded on its own (it is ~100 KB) and absent for most games. */
+export async function getFlow(gameId: string): Promise<FlowData | null> {
+  const res = await supabase.from("game_flow").select("data").eq("game_id", gameId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  return res.error || !res.data ? null : (res.data.data as FlowData);
 }
 
 export async function getGameBundle(id: string): Promise<GameBundle> {

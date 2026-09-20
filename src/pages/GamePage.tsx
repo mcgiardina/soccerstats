@@ -10,6 +10,8 @@ import PeriodEditor from "../components/PeriodEditor";
 import ChaptersExport from "../components/ChaptersExport";
 import StatsPanel from "../components/StatsPanel";
 import Momentum from "../components/Momentum";
+import FlowField from "../components/FlowField";
+import type { FlowData } from "../lib/types";
 import ShapePlot from "../components/ShapePlot";
 import GameForm from "../components/GameForm";
 import Modal from "../components/Modal";
@@ -85,6 +87,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
   const reload = useCallback(() => api.getGameBundle(id).then(setB).catch((e) => setErr(e.message)), [id]);
   useEffect(() => { if (ready) reload(); }, [reload, ready, isAdmin]);
+  const [flow, setFlow] = useState<FlowData | null>(null);
+  useEffect(() => { let on = true; if (ready && id) api.getFlow(id).then((f) => { if (on) setFlow(f); }); return () => { on = false; }; }, [ready, id, isAdmin]);
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
   const video = b ? mainVideo(b.videos) : null;
@@ -322,6 +326,13 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
         </aside>
       </div>
+
+      {flow && show("momentum") ? (
+        <div style={{ marginTop: "1rem" }}>
+          <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} onSeek={seek}
+            goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed)).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
+        </div>
+      ) : null}
 
       <div className="below">
         <div className="card" hidden={!show("stats")}>
