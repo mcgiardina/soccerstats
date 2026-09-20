@@ -10,7 +10,7 @@ class Frame:
     img: "object"
 
 
-def iter_frames(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
+def iter_frames(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None, start_seconds=0.0, size=None):
     """Yields Frame(t, img) one at a time. A 90-minute game at 5 fps is ~28k frames (~75 GB at
     720p), so nothing downstream may hold on to the images."""
     cap = cv2.VideoCapture(path, cv2.CAP_AVFOUNDATION) if hasattr(cv2, "CAP_AVFOUNDATION") else cv2.VideoCapture(path)
@@ -19,6 +19,9 @@ def iter_frames(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     step = max(1, int(round(src_fps / fps)))
     i = 0
+    if start_seconds:
+        i = int(start_seconds * src_fps) // step * step
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
     while True:
         if not cap.grab():
             break
@@ -28,6 +31,8 @@ def iter_frames(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
                 break
             ok, img = cap.retrieve()
             if ok:
+                if size is not None and (img.shape[1], img.shape[0]) != tuple(size):
+                    img = cv2.resize(img, tuple(size))
                 yield Frame(t=t, img=dewarp(img) if dewarp is not None else img)
         i += 1
     cap.release()

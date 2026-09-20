@@ -70,6 +70,15 @@ Overnight findings on the two BallerCam games (Sept 2026):
   it in under 20% of frames; (3) the keeper is recognised in 4% of frames (stand-in keepers from the
   goal track now cover this). BallerCam's "scoring play" markers are tapped after the fact and sit
   20-90 s after the goal. The pipeline now streams frames (peak ~3 GB, was ~75 GB for 90 min).
+- **Fixed wide view (prototype, `analyzer/fixedcam.py`).** BallerCam keeps the raw 4K fisheye upload
+  (the Panoramic View source, a plain `.mov`, HEVC, fixed framing, both goals always in shot). In a
+  fixed view the ball is found by motion against a rolling background instead of by recognition:
+  painted markings can never qualify, the goals sit at fixed pixels (found once on a player-free
+  median frame), and small bright movers are linked into tracks. On the same game where recognition
+  found the ball near the far goal in 0 of 14 frames, this tracks a struck ball to the goal mouth.
+  ~3x real time from the URL, nothing saved to disk. The two minutes before each of the four real
+  goals contain top-1% segments at one goal. Not yet measured: precision/recall, on/off-target,
+  which team. Camera knocks light up the whole crop and are dropped (362 frames in that game).
 - Kicks the goal-mouth judge rules out (goal in view, ball tracked, never near it) are no
   longer proposed as tags; the keeper-approach test runs only when the goal was not in view.
 
