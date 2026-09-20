@@ -115,7 +115,7 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
       }
     };
     for (const at of flow.attacks) if (Math.abs(at.t - t) < 90) bump(at.team, SPIKE * Math.min(1, at.score / maxScore) * 0.8, t - at.t, 5, 14);
-    for (const g of goals) if (Math.abs(g.t - t) < 140) bump(g.team, SPIKE * 1.1, t - g.t, 4, 30);
+    for (const g of goals) if (Math.abs(g.t - t) < 140) bump(g.team, SPIKE * 0.95, t - g.t, 4, 30);
   }, [flow, H, S, goals, maxScore]);
 
   const draw = useCallback(() => {
@@ -129,7 +129,7 @@ export default function FlowField({ flow, names, colors, goals = [], onSeek }: P
     const { z, seam, px } = buf.current;
     sample(t, z, seam);
 
-    const scale = Math.min(w * 0.8, h * 1.5), cx = w * 0.5, cy = h * 0.63;
+    const scale = Math.min(w * 0.78, h * 1.35), cx = w * 0.5, cy = h * 0.68;
     const cosY = Math.cos(YAW), sinY = Math.sin(YAW), cosE = Math.cos(ELEV), sinE = Math.sin(ELEV);
     const proj = (u: number, v: number, zz: number): [number, number] => {
       const x = u - 0.5, y = (v - 0.5) * PITCH_W;            // v = 0 is the near touchline

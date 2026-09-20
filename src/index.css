@@ -398,7 +398,7 @@ textarea { min-height: 84px; resize: vertical; }
   background: radial-gradient(120% 90% at 50% 55%, #161b26 0%, #0b0d13 62%, #07080c 100%); }
 .flow::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: .5;
   background: radial-gradient(40% 50% at 18% 30%, color-mix(in oklab, var(--flow-us) 22%, transparent), transparent 70%), radial-gradient(40% 50% at 84% 70%, color-mix(in oklab, var(--flow-them) 22%, transparent), transparent 70%); }
-.flow-stage { display: block; width: 100%; height: clamp(320px, 52vw, 560px); letter-spacing: .08em; }
+.flow-stage { display: block; width: 100%; height: clamp(340px, 56vw, 600px); letter-spacing: .08em; }
 .flow-score { position: absolute; top: 1.1rem; left: 1.25rem; display: flex; gap: 1.4rem; pointer-events: none; }
 .flow-score .side { display: grid; gap: .3rem; min-width: 4.2rem; }
 .flow-score .nm { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.7); max-width: 9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
