@@ -70,7 +70,9 @@ def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5, device="mps"):
     model = YOLO(weights_path())
     out = {}
     rejected = {}
+    seen = 0
     for f in frames:
+        seen += 1
         r = model(f.img, verbose=False, imgsz=1280, conf=0.3, device=device)[0]
         if r.keypoints is None or len(r.keypoints) == 0 or r.keypoints.conf is None:
             continue
@@ -94,7 +96,7 @@ def fit(frames, dets_by_t=None, min_points=5, conf_thresh=0.5, device="mps"):
             out[f.t] = (H, conf)
         else:
             rejected[why.split()[0]] = rejected.get(why.split()[0], 0) + 1
-    print(f"homography kept on {len(out)} / {len(frames)} frames; rejected: {rejected}")
+    print(f"homography kept on {len(out)} / {seen} frames; rejected: {rejected}")
     return out
 
 

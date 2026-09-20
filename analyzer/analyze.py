@@ -18,7 +18,7 @@ from analyzer import db, fetch, video, detect, teams, possession, shots, homogra
 MODEL_VERSION = "mf-analyzer-0.1"
 
 
-def diagnostics(path, frames):
+def diagnostics(path, frames=()):
     """Versions, device and what the sampled video looked like, stored in the run params."""
     import platform
     d = {"python": platform.python_version(), "machine": platform.node()}
@@ -33,7 +33,8 @@ def diagnostics(path, frames):
         cap.release()
     except Exception as e:  # noqa: BLE001
         d["error"] = str(e)[:120]
-    d.update({"sampled": len(frames), "first_t": round(frames[0].t, 3) if frames else None, "last_t": round(frames[-1].t, 3) if frames else None})
+    if frames:
+        d.update({"sampled": len(frames), "first_t": round(frames[0].t, 3), "last_t": round(frames[-1].t, 3)})
     return d
 
 
@@ -141,11 +142,26 @@ def main() -> int:
                 frames = []
         else:
             path = fetch.download(main_video["youtube_id"], max_height=args.max_height)
-            frames = video.sample(path, fps=args.fps, limit_seconds=args.limit_seconds)
             # what this machine saw: lets two runs of the same game (laptop vs mini) be compared
             if not args.dry_run:
-                db.update_run_params(run["id"], {"diag": diagnostics(path, frames)})
-            dets = detect.run(frames, backend=args.backend)
+                db.update_run_params(run["id"], {"diag": diagnostics(path)})
+            # Frames are streamed: a 90-minute game would be ~75 GB in memory. Detection keeps what
+            # later stages need (shirt colours, on-grass flags, a sparse goal track) and drops the image.
+            from analyzer import goalworld
+            import cv2 as _cv2
+            _cap = _cv2.VideoCapture(path); _sf = _cap.get(_cv2.CAP_PROP_FPS) or 30.0
+            def _load(t):
+                _cap.set(_cv2.CAP_PROP_POS_FRAMES, int(round(t * _sf))); ok, im = _cap.read()
+                return im if ok else None
+            teams.FRAME_LOADER = _load
+            frames = True   # (truthy: the homography pass below re-reads the video at 1 fps)
+            dets = detect.run(video.iter_frames(path, fps=args.fps, limit_seconds=args.limit_seconds), backend=args.backend,
+                              goal_finder=goalworld.default_finder(), goal_every=max(1, int(round(args.fps))),
+                              total=video.frame_count(path, fps=args.fps, limit_seconds=args.limit_seconds))
+            print(f"sampled {len(dets)} frames at ~{args.fps} fps")
+            if not args.dry_run and dets:
+                db.update_run_params(run["id"], {"diag": {**diagnostics(path), "sampled": len(dets), "first_t": round(dets[0].t, 3), "last_t": round(dets[-1].t, 3),
+                                                          "goal_frames": sum(1 for d in dets if d.goal), "keeper_frames": sum(1 for d in dets if d.keepers)}})
             if args.limit_seconds is None:
                 # detections are the expensive part: cache them before anything that can fail
                 detect.save_cache(cache_path, dets, args.fps)
@@ -154,9 +170,12 @@ def main() -> int:
             if assign is None:
                 raise RuntimeError("Kit colours too similar to separate teams; possession not reported.")
             for d in dets:
-                d.labels = [assign(d.img, p) for p in d.players]
+                d.labels = [assign.by_feat(f, g) for f, g in zip(d.feats, d.grass)] if d.feats is not None else [assign(d.img, p) for p in d.players]
             if args.limit_seconds is None:
                 detect.save_cache(cache_path, dets, args.fps)
+
+        # low cameras: the keeper is rarely recognised, so stand one in from the goal track
+        detect.keepers_from_goal(dets)
 
         if assign is not None and getattr(teams.assign, "us_cluster", None) is not None:
             choice = {"us_cluster": "AB"[teams.assign.us_cluster], "team_pick": getattr(teams.assign, "method", None),
@@ -186,8 +205,7 @@ def main() -> int:
                 H = homography.fit(src_frames)
             else:
                 # pitch model at ~1 fps on the panned video; gate with player feet from the same frames
-                step = max(1, int(round(args.fps)))
-                H = homography.fit(frames[::step], dets_by_t=by_t)
+                H = homography.fit(video.iter_frames(path, fps=1.0, limit_seconds=args.limit_seconds), dets_by_t=by_t)
             homography.save_cache(os.path.join(fetch.CACHE, f"{args.game_id}_homog.json"), H)
         elif args.from_cache and args.refit_homography and homography.available():
             by_t = {round(d.t, 1): d for d in dets}

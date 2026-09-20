@@ -10,18 +10,17 @@ class Frame:
     img: "object"
 
 
-def sample(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
-    """dewarp: optional callable applied to every frame (fisheye sources)."""
+def iter_frames(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
+    """Yields Frame(t, img) one at a time. A 90-minute game at 5 fps is ~28k frames (~75 GB at
+    720p), so nothing downstream may hold on to the images."""
     cap = cv2.VideoCapture(path, cv2.CAP_AVFOUNDATION) if hasattr(cv2, "CAP_AVFOUNDATION") else cv2.VideoCapture(path)
     if not cap.isOpened():
         cap = cv2.VideoCapture(path)
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     step = max(1, int(round(src_fps / fps)))
-    frames = []
     i = 0
     while True:
-        ok = cap.grab()
-        if not ok:
+        if not cap.grab():
             break
         if i % step == 0:
             t = i / src_fps
@@ -29,11 +28,24 @@ def sample(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
                 break
             ok, img = cap.retrieve()
             if ok:
-                if dewarp is not None:
-                    img = dewarp(img)
-                frames.append(Frame(t=t, img=img))
+                yield Frame(t=t, img=dewarp(img) if dewarp is not None else img)
         i += 1
     cap.release()
+
+
+def frame_count(path: str, fps: float = 5.0, limit_seconds=None):
+    cap = cv2.VideoCapture(path)
+    src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    if limit_seconds is not None:
+        n = min(n, int(limit_seconds * src_fps))
+    return n // max(1, int(round(src_fps / fps)))
+
+
+def sample(path: str, fps: float = 5.0, limit_seconds=None, dewarp=None):
+    """All frames in memory. Only for short clips and the --relabel debugging path."""
+    frames = list(iter_frames(path, fps=fps, limit_seconds=limit_seconds, dewarp=dewarp))
     print(f"sampled {len(frames)} frames at ~{fps} fps")
     return frames
 

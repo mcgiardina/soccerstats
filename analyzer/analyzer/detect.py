@@ -22,6 +22,9 @@ class FrameDet:
     img: object = None
     labels: list = None                           # per-player 'us'|'them'|None once teams are assigned
     size: tuple = None                            # (h, w)
+    feats: list = None                            # per-player torso colour [L, a, b] or None (computed while the frame is in hand)
+    grass: list = None                            # per-player: standing on the playing surface?
+    goal: dict = None                             # goal box seen in this frame (sparse, ~1 per second) or None
 
 
 WEIGHTS_DIR = os.path.join(os.environ.get("ANALYZER_CACHE") or os.path.expanduser("~/Library/Caches/match-film"), "weights")
@@ -85,10 +88,30 @@ def _pick_ball(img, cands):
     return None
 
 
-def run(frames, backend="local"):
+def _finish(fd, img, goal_finder, i, goal_every):
+    """Everything later stages need from the pixels, computed now so the image can be dropped."""
+    from analyzer.teams import torso_color, on_grass
+    fd.grass = [bool(on_grass(img, p)) for p in fd.players]
+    fd.feats = []
+    for p, g in zip(fd.players, fd.grass):
+        c = torso_color(img, p) if (g and (p[3] - p[1]) >= 20) else None
+        fd.feats.append([float(v) for v in c] if c is not None else None)
+    if goal_finder is not None and i % goal_every == 0:
+        try:
+            g = goal_finder.find(img, fd.keepers, [p for p, ok in zip(fd.players, fd.grass) if ok])
+            if g:
+                fd.goal = {k: round(float(g[k]), 1) for k in ("left", "top", "right", "bottom", "score")}
+        except Exception as e:  # noqa: BLE001
+            print("goal finder failed on a frame:", str(e)[:80])
+    fd.img = None
+    return fd
+
+
+def run(frames, backend="local", goal_finder=None, goal_every=5, total=None):
+    """frames: any iterable of Frame (a generator for full games). Images are not retained."""
     model, ball_model, device, football = _model(backend)
     out = []
-    for f in tqdm(frames, desc="detect"):
+    for f in tqdm(frames, desc="detect", total=total):
         res = model.predict(f.img, device=device, verbose=False, conf=BALL_CONF, imgsz=IMGSZ)[0]
         fd = FrameDet(t=f.t, img=f.img, size=f.img.shape[:2])
         ball_cands = []
@@ -101,7 +124,7 @@ def run(frames, backend="local"):
             fd.ball = _pick_ball(f.img, ball_cands)
             if fd.ball is not None:
                 fd.ball = fd.ball[:2]
-            out.append(fd); continue
+            out.append(_finish(fd, f.img, goal_finder, len(out), goal_every)); continue
         xyxy = res.boxes.xyxy.cpu().numpy()
         cls = res.boxes.cls.cpu().numpy().astype(int)
         ids = np.zeros(len(cls), dtype=int)   # replaced below by the index within fd.players
@@ -127,8 +150,42 @@ def run(frames, backend="local"):
         fd.ball = _pick_ball(f.img, ball_cands)
         if fd.ball is not None:
             fd.ball = fd.ball[:2]
-        out.append(fd)
+        out.append(_finish(fd, f.img, goal_finder, len(out), goal_every))
     return out
+
+
+def keepers_from_goal(dets, min_keeper_share=0.3, max_dt=0.7):
+    """The football model rarely recognises a youth keeper seen small and from a low camera (4% of
+    frames on the first ASC LB game against 62% on the reference). The shot triggers key off a
+    keeper box, so where the detector gave none, stand one in from the goal track: the person
+    standing in the goal mouth if there is one, else a virtual keeper on the goal line."""
+    share = sum(1 for d in dets if d.keepers) / max(1, len(dets))
+    obs = [(d.t, d.goal) for d in dets if d.goal]
+    if share >= min_keeper_share or not obs:
+        print(f"keeper seen in {share:.0%} of frames; goal seen in {len(obs)} sparse frames; no stand-ins needed")
+        return 0
+    ts = np.array([t for t, _ in obs])
+    added = 0
+    for d in dets:
+        if d.keepers:
+            continue
+        j = int(np.argmin(np.abs(ts - d.t)))
+        if abs(ts[j] - d.t) > max_dt:
+            continue
+        g = obs[j][1]
+        w, h = g["right"] - g["left"], g["bottom"] - g["top"]
+        inside = [p for p in d.players
+                  if g["left"] - 0.15 * w <= (p[0] + p[2]) / 2 <= g["right"] + 0.15 * w and g["top"] + 0.3 * h <= p[3] <= g["bottom"] + 0.4 * h]
+        if inside:
+            cx = (g["left"] + g["right"]) / 2
+            k = min(inside, key=lambda p: abs((p[0] + p[2]) / 2 - cx))
+            d.keepers = [(k[0], k[1], k[2], k[3], 0)]
+        else:
+            cx, kh = (g["left"] + g["right"]) / 2, 0.6 * h
+            d.keepers = [(cx - 0.15 * kh, g["bottom"] - kh, cx + 0.15 * kh, g["bottom"], 0)]
+        added += 1
+    print(f"keeper seen in only {share:.0%} of frames: stood in a keeper from the goal track on {added} frames")
+    return added
 
 
 # ---- local detection cache -------------------------------------------------------------
@@ -147,6 +204,7 @@ def save_cache(path, dets, fps):
             "players": [[round(float(p[0]), 1), round(float(p[1]), 1), round(float(p[2]), 1), round(float(p[3]), 1)] for p in d.players],
             "keepers": [[round(float(p[0]), 1), round(float(p[1]), 1), round(float(p[2]), 1), round(float(p[3]), 1)] for p in d.keepers],
             "labels": d.labels,
+            "goal": d.goal,
         })
     with gzip.open(path, "wt") as f:
         json.dump({"fps": fps, "size": list(dets[0].size) if dets else None, "frames": rows}, f)
@@ -162,7 +220,7 @@ def load_cache(path):
         players = [(b[0], b[1], b[2], b[3], i) for i, b in enumerate(r["players"])]
         keepers = [(b[0], b[1], b[2], b[3], i) for i, b in enumerate(r.get("keepers", []))]
         dets.append(FrameDet(t=r["t"], players=players, keepers=keepers, ball=tuple(r["ball"]) if r["ball"] else None,
-                             labels=r["labels"], size=size))
+                             labels=r["labels"], size=size, goal=r.get("goal")))
     print(f"loaded {len(dets)} cached frames from {path}")
     return data["fps"], dets
 

@@ -167,10 +167,13 @@ def _same_kit(ci, cj):
 def assign(dets, game_id, force_confirm=False, us_cluster=None):
     samples, refs, raw_bgr = [], [], []
     for fi, d in enumerate(dets[::3]):
-        for p in d.players:
-            if (p[3] - p[1]) < 28 or not on_grass(d.img, p):   # big enough for a clean shirt crop, and on the pitch
+        for j, p in enumerate(d.players):
+            if (p[3] - p[1]) < 28:                       # big enough for a clean shirt crop
                 continue
-            c = torso_color(d.img, p)
+            if d.feats is not None:                      # computed during detection (images are not kept)
+                c = np.array(d.feats[j], dtype=float) if (d.grass[j] and d.feats[j] is not None) else None
+            else:
+                c = torso_color(d.img, p) if on_grass(d.img, p) else None
             if c is not None:
                 samples.append(_feat(c)); refs.append((fi * 3, p[4])); raw_bgr.append(c)
     if len(samples) < 200:
@@ -253,12 +256,21 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
         if g_to in team_of_cluster and g_from not in team_of_cluster:
             team_of_cluster[g_from] = team_of_cluster[g_to]
 
+    def by_feat(c, grass=True):
+        """Label from a stored torso colour (what detection computed while it had the frame)."""
+        if not grass or c is None:
+            return None
+        return _label(np.array(c, dtype=float))
+
     def label_of(img, box):
         if not on_grass(img, box):
             return None
         c = torso_color(img, box)
         if c is None:
             return None
+        return _label(c)
+
+    def _label(c):
         f = _feat(c)
         d = np.linalg.norm(cluster_centers - f, axis=1)
         k = int(d.argmin())
@@ -268,11 +280,15 @@ def assign(dets, game_id, force_confirm=False, us_cluster=None):
             return None
         return "us" if team_of_cluster[k] == us_cluster else "them"
 
+    label_of.by_feat = by_feat
     return label_of
 
 
 from analyzer.fetch import CACHE
 PREVIEW = os.path.join(CACHE, "team_preview.jpg")
+
+
+FRAME_LOADER = None   # set by analyze.py: t -> BGR image, so the preview can re-read its one frame
 
 
 def _write_preview(dets, refs, labels):
@@ -282,7 +298,13 @@ def _write_preview(dets, refs, labels):
     def score(i):
         return sum(1 for p in dets[i].players if (i, p[4]) in idx)
     best = max(range(0, len(dets), 3), key=score)
-    img = dets[best].img.copy()
+    img = dets[best].img
+    if img is None and FRAME_LOADER is not None:
+        img = FRAME_LOADER(dets[best].t)
+    if img is None:
+        print("team preview skipped (no frame available)")
+        return
+    img = img.copy()
     for p in dets[best].players:
         k = idx.get((best, p[4]))
         if k is None:
