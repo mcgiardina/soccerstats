@@ -40,21 +40,31 @@ const StreamPlayer = forwardRef<PlayerHandle, Props>(function StreamPlayer({ vid
       if (!cancelled) setErr("This video couldn't be loaded from its host.");
     };
     const isHls = /\.m3u8($|\?)/i.test(src);
-    if (isHls && !v.canPlayType("application/vnd.apple.mpegurl")) {
+    const native = () => {
+      v.src = src;
+      if (startAt && startAt > 0) v.addEventListener("loadedmetadata", () => { v.currentTime = startAt; }, { once: true });
+    };
+    let usingHlsJs = false;
+    if (isHls) {
+      // hls.js wherever the browser has Media Source Extensions. Desktop Chrome now also answers
+      // "maybe" for native HLS, but its native path never started this stream; the native path is
+      // for iPhones, which have no MSE.
+      usingHlsJs = true;
       import("hls.js").then(({ default: Hls }) => {
         if (cancelled) return;
-        if (!Hls.isSupported()) { setErr("This browser can't play this stream."); return; }
+        if (!Hls.isSupported()) {
+          usingHlsJs = false;
+          if (v.canPlayType("application/vnd.apple.mpegurl")) native(); else setErr("This browser can't play this stream.");
+          return;
+        }
         const h = new Hls({ startPosition: startAt && startAt > 0 ? startAt : -1 });
         h.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) fail(); });
         h.loadSource(src); h.attachMedia(v); hls = h;
       });
-    } else {
-      v.src = src;
-      if (startAt && startAt > 0) v.addEventListener("loadedmetadata", () => { v.currentTime = startAt; }, { once: true });
-    }
+    } else native();
     const time = () => onTimeRef.current?.(v.currentTime);
     const dur = () => { if (Number.isFinite(v.duration) && v.duration > 0) onDurRef.current?.(v.duration); };
-    const bad = () => { if (!isHls || v.canPlayType("application/vnd.apple.mpegurl")) fail(); };
+    const bad = () => { if (!usingHlsJs) fail(); };
     v.addEventListener("timeupdate", time); v.addEventListener("seeking", time); v.addEventListener("durationchange", dur); v.addEventListener("error", bad);
     return () => {
       cancelled = true; hls?.destroy();
