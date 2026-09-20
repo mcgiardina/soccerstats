@@ -27,6 +27,13 @@ export async function getFlow(gameId: string): Promise<FlowData | null> {
   return res.error || !res.data ? null : (res.data.data as FlowData);
 }
 
+/** Replace a game's flow with one built by analyzer/flow.py (admin only; the worker writes it directly). */
+export async function saveFlow(gameId: string, data: FlowData): Promise<void> {
+  if (!data || data.v !== 1 || !data.h || !data.seam || !Array.isArray(data.m)) throw new Error("That isn't a match flow file.");
+  unwrap(await supabase.from("game_flow").delete().eq("game_id", gameId));
+  unwrap(await supabase.from("game_flow").insert({ game_id: gameId, data }));
+}
+
 export async function getGameBundle(id: string): Promise<GameBundle> {
   const [g, v, t, s, ts, b, sh, r, pe] = await Promise.all([
     supabase.from("games").select("*").eq("id", id).single(),

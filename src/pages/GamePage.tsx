@@ -91,6 +91,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const [flow, setFlow] = useState<FlowData | null>(null);
   const [playId, setPlayId] = useState<string | null>(null);
   const resumeAt = useRef<number | null>(null);
+  const [flowUrl, setFlowUrl] = useState("");
   useEffect(() => { let on = true; if (ready && id) api.getFlow(id).then((f) => { if (on) setFlow(f); }); return () => { on = false; }; }, [ready, id, isAdmin]);
 
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
@@ -158,6 +159,11 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   async function saveShot(tag: Tag, shot: Partial<Shot>) {
     await api.upsertShot({ ...shot, tag_id: tag.id, game_id: tag.game_id });
     reload();
+  }
+
+  async function importFlow(load: () => Promise<unknown>) {
+    try { const data = (await load()) as FlowData; await api.saveFlow(id, data); setFlow(data); setFlowUrl(""); showToast("Match flow attached"); }
+    catch (e) { showToast(e instanceof Error ? e.message : "Couldn't import that"); }
   }
 
   // ---- video ---------------------------------------------------------------
@@ -334,6 +340,17 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                           <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.error ? ` · ${r.error}` : ""}</span>
                         </div>
                       ))}
+                    </div>
+                  ) : null}
+                  {admin ? (
+                    <div style={{ marginTop: ".9rem" }}>
+                      <div className="small"><strong>Match flow</strong> <span className="muted">{flow ? "· attached" : "· none yet"}</span></div>
+                      <p className="tiny muted" style={{ margin: ".2rem 0 .4rem" }}>The momentum graphic's data, built from the full-field recording by <code>analyzer/flow.py</code>. Pick the flow.json it wrote, or give its address.</p>
+                      <div className="row" style={{ gap: ".4rem" }}>
+                        <input type="text" placeholder="/demo/flow.json" value={flowUrl} onChange={(e) => setFlowUrl(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+                        <button className="btn sm" disabled={!flowUrl.trim()} onClick={() => importFlow(() => fetch(flowUrl.trim()).then((r) => { if (!r.ok) throw new Error(`Couldn't fetch that (${r.status})`); return r.json(); }))}>Import</button>
+                        <label className="btn sm" style={{ cursor: "pointer" }}>File…<input type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFlow(() => f.text().then((t) => JSON.parse(t))); e.target.value = ""; }} /></label>
+                      </div>
                     </div>
                   ) : null}
                   {b.teamStats.some((s) => s.source === "machine") ? <div className="notice info" style={{ marginTop: ".75rem" }}>Machine possession and turnover numbers show with ≈. If you disagree after watching, the numbers stay a proposal; there's no per-player data to correct.</div> : null}
