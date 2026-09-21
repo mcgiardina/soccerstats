@@ -7,17 +7,28 @@ function V({ v, machine, suffix = "" }: { v: number | string | null | undefined;
   return <td className={`v ${machine ? "machine" : ""}`}>{v}{suffix}</td>;
 }
 
-export default function StatsPanel({ s, compact, opponent }: { s: GameSummary; compact?: boolean; opponent?: string | null }) {
+/** territory: share of playing time each side was "on top" in the match flow (wide camera), shown
+ *  only when there is no possession figure. */
+export default function StatsPanel({ s, compact, opponent, territory }: { s: GameSummary; compact?: boolean; opponent?: string | null; territory?: { us: number; them: number } | null }) {
   const show = useShow();
   const names = useTeamNames(opponent);
   const posM = (src: string | null) => src === "machine";
-  const chip = (src: string | null) => src == null ? null : src === "machine" ? <span className="badge machine">≈ machine</span> : <span className="badge plain">confirmed</span>;
+  const chip = (src: string | null) => src == null ? null : src === "machine" ? <span className="badge machine">≈ Machine</span> : <span className="badge plain">Confirmed</span>;
   return (
     <div>
-      {show("possession") ? <div className="gauges">
-        <Gauge value={s.us.possession} label={names.us} side="us" chip={chip(s.us.possessionSource)} />
-        <Gauge value={s.them.possession} label={names.them} side="them" chip={chip(s.them.possessionSource)} />
-      </div> : null}
+      {show("possession") && (s.us.possession != null || s.them.possession != null) ? <>
+        <h3 className="gauge-title">Possession</h3>
+        <div className="gauges">
+          <Gauge value={s.us.possession} label={names.us} side="us" chip={chip(s.us.possessionSource)} />
+          <Gauge value={s.them.possession} label={names.them} side="them" chip={chip(s.them.possessionSource)} />
+        </div>
+      </> : show("possession") && territory ? <>
+        <h3 className="gauge-title">Time on top <span className="muted">· share of play spent pushing the other team back</span></h3>
+        <div className="gauges">
+          <Gauge value={territory.us} label={names.us} side="us" chip={<span className="badge machine">≈ Machine</span>} />
+          <Gauge value={territory.them} label={names.them} side="them" chip={<span className="badge machine">≈ Machine</span>} />
+        </div>
+      </> : null}
       <table className="stat-table">
         <thead><tr><th>{names.us}</th><th></th><th>{names.them}</th></tr></thead>
         <tbody>
@@ -36,7 +47,7 @@ export default function StatsPanel({ s, compact, opponent }: { s: GameSummary; c
                 <tr><V v={s.us.passesCompleted} machine /><td className="lbl">Completed</td><V v={s.them.passesCompleted} machine /></tr>
                 <tr><V v={s.us.passAccuracy != null ? Math.round(s.us.passAccuracy * 100) : null} machine suffix="%" /><td className="lbl">Pass accuracy</td><V v={s.them.passAccuracy != null ? Math.round(s.them.passAccuracy * 100) : null} machine suffix="%" /></tr>
               </> : null}
-              {show("turnovers") ? <tr><V v={s.us.turnovers} machine={posM(s.us.turnoversSource)} /><td className="lbl">Turnovers</td><V v={s.them.turnovers} machine={posM(s.them.turnoversSource)} /></tr> : null}
+              {show("turnovers") && (s.us.turnovers != null || s.them.turnovers != null) ? <tr><V v={s.us.turnovers} machine={posM(s.us.turnoversSource)} /><td className="lbl">Turnovers</td><V v={s.them.turnovers} machine={posM(s.them.turnoversSource)} /></tr> : null}
               {show("setpieces") ? <>
                 <tr><V v={s.us.corners} /><td className="lbl">Corners</td><V v={s.them.corners} /></tr>
                 <tr><V v={s.us.freeKicks} /><td className="lbl">Free kicks</td><V v={s.them.freeKicks} /></tr>

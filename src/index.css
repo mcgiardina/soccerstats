@@ -358,6 +358,8 @@ textarea { min-height: 84px; resize: vertical; }
 /* a booking: the little card the referee holds up, above the event's dot. (Not named .card: that is the app's panel class, and it turned the dot into a big white disc.) */
 .timeline .marker.booking::after { content: ""; position: absolute; left: 50%; bottom: calc(100% + 3px); width: 8px; height: 11px; border-radius: 2px; transform: translateX(-50%) rotate(8deg); background: #facc15; box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.35); }
 .timeline .marker.booking.red::after { background: #dc2626; }
+.gauge-title { font-family: var(--font); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--muted); text-align: center; margin: .6rem 0 0; }
+.gauge-title .muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .goal-word { color: var(--machine-ink, #8a5a00); }
 .tag-card { display: inline-block; width: 8px; height: 11px; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; transform: rotate(8deg); background: #facc15; box-shadow: 0 0 0 1px rgba(0,0,0,.35); } .tag-card.red { background: #dc2626; }
 .timeline .marker.machine { border-style: dashed; border-color: var(--machine); }

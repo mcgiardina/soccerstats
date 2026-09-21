@@ -176,6 +176,18 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
     }
     return out;
   }, [b]);
+  // Who was on top, from the match flow, for the chosen period (we always attack right in the flow).
+  const territory = useMemo(() => {
+    if (!flow) return null;
+    const halves = period === "h1" ? flow.halves.slice(0, 1) : period === "h2" ? flow.halves.slice(1, 2) : flow.halves;
+    let us = 0, them = 0;
+    flow.m.forEach((m, i) => {
+      const t = flow.t0 + i * flow.step;
+      if (!halves.some((h) => t >= h[0] && t <= h[1])) return;
+      if (m > 0.05) us++; else if (m < -0.05) them++;
+    });
+    return us + them ? { us: Math.round((us / (us + them)) * 100), them: 100 - Math.round((us / (us + them)) * 100) } : null;
+  }, [flow, period]);
   const summary = useMemo(() => (b ? summarizeGame(b.game, video, b.tags, b.shots, b.teamStats, period) : null), [b, video, period]);
 
   // Persist duration the first time the player reports it.
@@ -467,7 +479,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
               {(["full", "h1", "h2"] as Period[]).map((p) => <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)}>{p === "full" ? "Match" : p.toUpperCase()}</button>)}
             </div>
           </div>
-          <StatsPanel s={summary} opponent={g.opponent} />
+          <StatsPanel s={summary} opponent={g.opponent} territory={territory} />
           {b.buckets.length && show("momentum") ? <div style={{ marginTop: ".75rem" }}><Momentum buckets={b.buckets} names={names} /></div> : null}
         </div>
 
