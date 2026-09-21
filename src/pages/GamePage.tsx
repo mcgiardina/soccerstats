@@ -87,11 +87,13 @@ function PassThirds({ passes, names }: { passes: import("../lib/types").PassEven
 }
 
 function SkipIcon({ dir, n }: { dir: "back" | "fwd"; n: number }) {
+  // Forward = a clockwise arrow: head at the top pointing right, tail trailing round behind it
+  // (the gap is AHEAD of the head). Back is its mirror image.
   const flip = dir === "back" ? "scale(-1,1) translate(-24,0)" : undefined;
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <g transform={flip} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 4a8 8 0 1 1-7.5 5.2" />
+        <path d="M12 4a8 8 0 1 0 7.5 5.2" />
         <path d="M12 1.5L15 4l-3 2.5" fill="currentColor" stroke="none" />
       </g>
       <text x="12" y="15.2" textAnchor="middle" fontSize={n >= 10 ? 7.5 : 8.5} fontWeight="800" fill="currentColor" fontFamily="var(--font)">{n}</text>
@@ -482,8 +484,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
           {mapMode === "shots" || !show("passes") ? (
             <>
-              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) seek(seekTime(t.t_seconds, t.type)); }} />
-              <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it. {names.us} attack →, {names.them} attack ←.</div>
+              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) { seek(seekTime(t.t_seconds, t.type)); if (admin) setPlacing(t); } }} />
+              <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it{admin ? " and move it or change its details" : ""}. {names.us} attack →, {names.them} attack ←.</div>
             </>
           ) : (
             <>

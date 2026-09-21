@@ -71,6 +71,7 @@ export default function TagList(p: Props) {
             <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds, t.type))} title="Jump">{mt.label}</span>
             <span className="lbl">
               <span className={`badge ${t.team ?? ""}`}>{names.of(t.team)}</span>
+              {t.type === "yellow_card" || t.type === "red_card" ? <i className={`tag-card ${t.type === "red_card" ? "red" : ""}`} aria-hidden="true" /> : null}
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
               {t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
               {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}
@@ -86,7 +87,7 @@ export default function TagList(p: Props) {
                 </>
               ) : null}
               {p.isAdmin && (t.type === "shot" || t.type === "goal" || t.type === "penalty" || t.outcome === "shot" || t.outcome === "goal") ? (
-                <button className="btn sm" onClick={() => p.onPlace?.(t)} title="Place on pitch">{shot?.pitch_x != null ? "📍" : "＋📍"}</button>
+                <button className="btn sm" onClick={() => p.onPlace?.(t)} title={shot?.pitch_x != null ? "Move it on the pitch, or change on target / body part / situation" : "Place on pitch"}>{shot?.pitch_x != null ? "📍 Edit" : "＋📍"}</button>
               ) : null}
               {p.isAdmin ? <button className="btn sm" onClick={() => p.onEdit?.(t)} title="Edit">✎</button> : null}
               {p.isAdmin ? <button className="btn sm danger" onClick={() => p.onDelete?.(t)} title="Delete">🗑</button> : null}
