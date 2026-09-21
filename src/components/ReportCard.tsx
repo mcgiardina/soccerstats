@@ -3,7 +3,7 @@ import { mainVideo } from "../lib/types";
 import { CONFIG } from "../config";
 import { useShow, useTeam, useTeamNames } from "../lib/team";
 import { summarizeGame, trustedTags, isGoalTag } from "../lib/stats";
-import { toMatchTime, fmtDate } from "../lib/time";
+import { cap, toMatchTime, fmtDate } from "../lib/time";
 import PitchMap from "./PitchMap";
 import StatsPanel from "./StatsPanel";
 import Momentum from "./Momentum";
@@ -21,7 +21,7 @@ export default function ReportCard({ b }: { b: GameBundle }) {
   return (
     <div className="report">
       <div className="head">
-        <div className="teams">{fmtDate(b.game.played_on)}{b.game.competition ? ` · ${b.game.competition}` : ""}</div>
+        <div className="teams">{fmtDate(b.game.played_on)}{b.game.competition ? ` · ${cap(b.game.competition)}` : ""}</div>
         <div className="big">{usFirst ? `${s.us.goals} – ${s.them.goals}` : `${s.them.goals} – ${s.us.goals}`}</div>
         <div className="teams">{usFirst ? `${team.shortName} vs ${b.game.opponent}` : `${b.game.opponent} vs ${team.shortName}`} · {res}</div>
       </div>

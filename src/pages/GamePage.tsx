@@ -25,7 +25,7 @@ import { useTheme } from "../lib/theme";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
 import { isGoalTag, leadKind, summarizeGame, trustedTags } from "../lib/stats";
-import { fmtClock, fmtDate, seekTime, toMatchTime } from "../lib/time";
+import { cap, fmtClock, fmtDate, seekTime, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
 import { openUrl, providerLabel, resolveSource } from "../lib/sources";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
@@ -308,12 +308,12 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       {toast ? <div className="toast">{toast}</div> : null}
       <div className="row" style={{ justifyContent: "space-between", marginBottom: ".2rem" }}>
         <Link to="/" className="crumb">← Season</Link>
-        {!g.published ? <span className="badge draft">draft · only admins can see this</span> : null}
+        {!g.published ? <span className="badge draft">Draft · only admins can see this</span> : null}
       </div>
       <div className="title-row">
         <div>
           <h1>{usFirst ? `${team.shortName} ${scoreText} ` : ""}<Link to={`/opponents/${encodeURIComponent(g.opponent)}`}>{g.opponent}</Link>{!usFirst ? ` ${scoreText} ${team.shortName}` : ""}</h1>
-          <div className="sub">{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
+          <div className="sub">{fmtDate(g.played_on)} · {cap(g.home_away)}{g.competition ? ` · ${cap(g.competition)}` : ""}{g.venue ? ` · ${g.venue}` : ""}</div>
         </div>
         <div className="actions-pills">
           {video ? <button className="btn" onClick={async () => showToast((await copyText(shareUrl(g.id, current > 5 ? current : undefined))) ? "Share link copied" : "Copy failed")}>↗ Share</button> : null}
@@ -411,7 +411,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                       {b.runs.map((r) => (
                         <div key={r.id} className="tag-row small">
                           <span className="mono">{r.id.slice(0, 8)}</span>
-                          <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status === "cancelled" ? "stopped" : r.status}</span>
+                          <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{cap(r.status === "cancelled" ? "stopped" : r.status)}</span>
                           <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.status === "running" && typeof r.params?.stage === "string" ? ` · ${r.params.stage}` : ""}{r.error ? ` · ${r.error}` : ""}</span>
                           {r.status === "queued" ? <button className="btn sm" onClick={async () => { await api.cancelQueuedRun(r.id); reload(); }}>Cancel</button>
                             : r.status === "running" ? <button className="btn sm danger" onClick={async () => { if (confirm("Stop this run? What it has worked out so far is thrown away.")) { await api.stopRun(r.id); showToast("Stopping: the worker ends it within half a minute"); reload(); } }}>Stop</button> : <span />}
@@ -513,7 +513,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           <h3>Video sources</h3>
           {b.videos.map((v) => (
             <div key={v.id} className="tag-row small">
-              <span className="badge">{VIDEO_KINDS.find((k) => k.value === v.kind)?.label ?? v.kind ?? "video"}</span>
+              <span className="badge">{VIDEO_KINDS.find((k) => k.value === v.kind)?.label ?? cap(v.kind) ?? "Video"}</span>
               <span className="lbl">{providerLabel(v)} · {v.title ?? v.youtube_id}{v.duration_seconds ? ` · ${Math.round(v.duration_seconds / 60)} min` : ""}</span>
               <button className="btn sm danger" onClick={async () => { if (confirm("Detach this video? Tags stay but lose their video link.")) { await api.deleteVideo(v.id); reload(); } }}>Detach</button>
             </div>

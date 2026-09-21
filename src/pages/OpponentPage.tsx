@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { loadSeason, type SeasonData } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { summarizeGame } from "../lib/stats";
-import { fmtDate } from "../lib/time";
+import { cap, fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
 import PitchMap from "../components/PitchMap";
 import { useShow } from "../lib/team";
@@ -43,7 +43,7 @@ export default function OpponentPage() {
             {v?.youtube_id ? <img className="thumb-sm" src={thumbnailUrl(v.youtube_id, "hq")} alt="" /> : null}
             <div style={{ flex: 1, minWidth: 200 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
-                <strong>{fmtDate(g.played_on)} · {g.home_away}{g.competition ? ` · ${g.competition}` : ""}</strong>
+                <strong>{fmtDate(g.played_on)} · {cap(g.home_away)}{g.competition ? ` · ${cap(g.competition)}` : ""}</strong>
                 <span className="score">{s.us.goals}–{s.them.goals}</span>
               </div>
               <div className="small muted">Shots {s.us.shots}–{s.them.shots}{s.us.xg != null || s.them.xg != null ? ` · xG ${s.us.xg ?? "?"}–${s.them.xg ?? "?"}` : ""}{s.us.possession != null ? ` · poss ${Math.round(s.us.possession)}% ≈` : ""}</div>

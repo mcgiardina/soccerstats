@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { loadSeason, type SeasonData } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { fmtDate } from "../lib/time";
+import { cap, fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
 
 const ytOf = (videos: { youtube_id: string | null; kind: string | null }[]) => videos.find((x) => x.youtube_id && x.kind !== "wide_fixed")?.youtube_id ?? null;
@@ -96,7 +96,7 @@ export default function SeasonPage() {
               <div className="body">
                 <div className="opp">{g.home_away === "away" ? "@ " : "vs "}{g.opponent}</div>
                 <div className="meta">
-                  <span className="small muted">{fmtDate(g.played_on)}{g.competition ? ` · ${g.competition}` : ""}</span>
+                  <span className="small muted">{fmtDate(g.played_on)}{g.competition ? ` · ${cap(g.competition)}` : ""}</span>
                   {hasScore ? <span className={`score pill ${cls}`}>{s.us.goals}–{s.them.goals}</span> : <span className="badge plain">no score</span>}
                 </div>
                 {(!g.published || !v) ? <div className="row" style={{ gap: ".4rem", marginTop: ".4rem" }}>

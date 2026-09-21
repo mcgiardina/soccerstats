@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Shot, Tag, Video } from "../lib/types";
 import { TAG_LABELS, SET_PIECE_TYPES } from "../lib/types";
-import { seekTime, toMatchTime } from "../lib/time";
+import { cap, seekTime, toMatchTime } from "../lib/time";
 import { isGoalTag, leadKind } from "../lib/stats";
 import { shareUrl, copyText } from "../lib/links";
 import { useTeamNames } from "../lib/team";
@@ -58,7 +58,7 @@ export default function TagList(p: Props) {
           ))}
         </div>
         <select value={side} onChange={(e) => setSide(e.target.value as "all" | "us" | "them")} className="pill">
-          <option value="all">both teams</option><option value="us">{names.us}</option><option value="them">{names.them}</option>
+          <option value="all">Both teams</option><option value="us">{names.us}</option><option value="them">{names.them}</option>
         </select>
       </div>
       {list.length === 0 ? <p className="muted small">No tags yet.</p> : null}
@@ -74,7 +74,7 @@ export default function TagList(p: Props) {
               <span className={`badge ${t.team ?? ""}`}>{names.of(t.team)}</span>
               {t.type === "yellow_card" || t.type === "red_card" ? <i className={`tag-card ${t.type === "red_card" ? "red" : ""}`} aria-hidden="true" /> : null}
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
-              {t.outcome === "goal" ? <strong className="goal-word"> · Goal</strong> : t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
+              {t.outcome === "goal" ? <strong className="goal-word"> · Goal</strong> : t.outcome ? <span className="muted"> · {cap(t.outcome)}</span> : null}
               {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}
               {shot?.xg != null ? <span className="muted small"> · xG {shot.xg.toFixed(2)}</span> : null}
               {machine ? <span className="badge machine" style={{ marginLeft: 6 }} title="Machine proposal">≈{t.confidence != null ? ` ${Math.round(t.confidence * 100)}%` : ""}{t.confirmed === true ? " ✓" : t.confirmed === false ? " ✗" : ""}</span> : null}

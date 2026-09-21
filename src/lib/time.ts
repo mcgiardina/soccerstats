@@ -61,3 +61,9 @@ export function fmtDateShort(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+/** Stored values are lower case ("home", "league", "cleared"); on the page they read as words. */
+export function cap(s: string | null | undefined): string {
+  const v = (s ?? "").replace(/_/g, " ").trim();
+  return v ? v[0].toUpperCase() + v.slice(1) : "";
+}
