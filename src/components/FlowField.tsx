@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FlowData } from "../lib/types";
 import { luminance } from "../lib/kit";
 import { fmtClock } from "../lib/time";
+import { useTheme } from "../lib/theme";
 
 export interface FlowGoal { t: number; team: "us" | "them" }
 
@@ -37,28 +38,41 @@ function rgb(hex: string): [number, number, number] {
   return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16)) as [number, number, number];
 }
 
-/** A kit colour as it should glow on the dark stage: black shirts become graphite, not a hole. */
-function stageColor(hex: string, fallback: string): [number, number, number] {
+/** A kit colour as it should read on the stage: on the dark one black shirts become graphite, not a
+ *  hole; on the light one white shirts stay white (their mesh lines carry them) and pale colours deepen. */
+function stageColor(hex: string, fallback: string, light: boolean): [number, number, number] {
   const ok = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex || "");
   const c = rgb(ok ? hex : fallback); const lum = luminance(ok ? hex : fallback);
+  if (light) return c;
   const lift = lum < 0.08 ? 0.36 : lum < 0.2 ? 0.18 : 0;
   return c.map((v) => Math.round(v + (255 - v) * lift)) as [number, number, number];
 }
 
-// Light kits (white, yellow) are drawn as a bright sheet and dark kits as a dark one with lit mesh
-// lines, so white v black still reads as two teams.
-function ramp(c: [number, number, number], light: boolean): { fill: string[]; line: string[] } {
+// Each team is a sheet with mesh lines, shaded by height. On the dark stage light kits are bright
+// sheets and dark kits dark ones with lit lines; on the light stage it is the other way round:
+// white kits are paper with slate lines, dark kits solid with pale lines. White v black always reads.
+function ramp(c: [number, number, number], lightKit: boolean, lightStage: boolean): { fill: string[]; line: string[] } {
   const fill: string[] = [], line: string[] = [];
+  const mix = (a: number[], b: number[], k: number) => a.map((v, i) => Math.round(v * (1 - k) + b[i] * k));
   for (let i = 0; i < SHADES; i++) {
     const k = i / (SHADES - 1);
-    const f = light ? 0.3 + 0.5 * k : 0.1 + 0.34 * k, l = light ? 0.7 + 0.3 * k : 0.42 + 0.58 * k;
-    fill.push(`rgb(${c.map((v) => Math.round(v * f + 8 * (1 - f))).join(",")})`);
-    line.push(`rgba(${c.map((v) => Math.round(v * l)).join(",")},${0.55 + 0.45 * k})`);
+    if (!lightStage) {
+      const f = lightKit ? 0.3 + 0.5 * k : 0.1 + 0.34 * k, l = lightKit ? 0.7 + 0.3 * k : 0.42 + 0.58 * k;
+      fill.push(`rgb(${c.map((v) => Math.round(v * f + 8 * (1 - f))).join(",")})`);
+      line.push(`rgba(${c.map((v) => Math.round(v * l)).join(",")},${0.55 + 0.45 * k})`);
+    } else if (lightKit) {
+      fill.push(`rgb(${mix(mix(c, [120, 130, 150], 0.22 - 0.2 * k), [255, 255, 255], 0.15 + 0.5 * k).join(",")})`);
+      line.push(`rgba(${mix(c, [40, 50, 72], 0.72).join(",")},${0.3 + 0.35 * k})`);
+    } else {
+      fill.push(`rgb(${mix([255, 255, 255], c, 0.62 + 0.36 * k).join(",")})`);
+      line.push(`rgba(${mix(c, [255, 255, 255], 0.55).join(",")},${0.35 + 0.45 * k})`);
+    }
   }
   return { fill, line };
 }
 
 export default function FlowField({ flow, names, colors: kitColors, goals = [], onSeek, storageKey }: Props) {
+  const lightStage = useTheme().resolved === "light";
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const spark = useRef<HTMLCanvasElement>(null);
@@ -85,9 +99,9 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
   const tStart = flow.halves[0]?.[0] ?? flow.t0;
   const tStop = flow.halves[flow.halves.length - 1]?.[1] ?? tEnd;
   const maxScore = useMemo(() => Math.max(12, ...flow.attacks.map((a) => a.score)), [flow.attacks]);
-  const cUs = useMemo(() => stageColor(colors.us, "#7ecdb8"), [colors.us]);
-  const cThem = useMemo(() => stageColor(colors.them, "#e07a5f"), [colors.them]);
-  const pal = useMemo(() => ({ us: ramp(cUs, luminance(`#${cUs.map((v) => v.toString(16).padStart(2, "0")).join("")}`) > 0.55), them: ramp(cThem, luminance(`#${cThem.map((v) => v.toString(16).padStart(2, "0")).join("")}`) > 0.55) }), [cUs, cThem]);
+  const cUs = useMemo(() => stageColor(colors.us, "#7ecdb8", lightStage), [colors.us, lightStage]);
+  const cThem = useMemo(() => stageColor(colors.them, "#e07a5f", lightStage), [colors.them, lightStage]);
+  const pal = useMemo(() => ({ us: ramp(cUs, luminance(`#${cUs.map((v) => v.toString(16).padStart(2, "0")).join("")}`) > 0.55, lightStage), them: ramp(cThem, luminance(`#${cThem.map((v) => v.toString(16).padStart(2, "0")).join("")}`) > 0.55, lightStage) }), [cUs, cThem, lightStage]);
 
   const matchMinute = useCallback((t: number) => {
     const [h1, h2] = flow.halves;
@@ -162,7 +176,7 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
 
     // soft shadow under the sheet
     const sh = [proj(0, 0, -0.035), proj(1, 0, -0.035), proj(1, 1, -0.035), proj(0, 1, -0.035)];
-    ctx.save(); ctx.filter = "blur(18px)"; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.beginPath();
+    ctx.save(); ctx.filter = "blur(18px)"; ctx.fillStyle = lightStage ? "rgba(23,32,58,.22)" : "rgba(0,0,0,.55)"; ctx.beginPath();
     sh.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.fill(); ctx.restore();
 
     // quads, far to near (far touchline first; with this yaw the left end is further away)
@@ -188,7 +202,7 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
       ctx.strokeStyle = style; ctx.lineWidth = width; ctx.stroke();
     };
     const seg = (a: [number, number], b: [number, number], n = 24): [number, number][] => Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n]);
-    const chalk = "rgba(255,255,255,.34)";
+    const chalk = lightStage ? "rgba(23,32,58,.4)" : "rgba(255,255,255,.34)";
     const e = 0.012;
     drape([...seg([e, e], [1 - e, e]), ...seg([1 - e, e], [1 - e, 1 - e]), ...seg([1 - e, 1 - e], [e, 1 - e]), ...seg([e, 1 - e], [e, e])], chalk, 1);
     drape(seg([0.5, e], [0.5, 1 - e]), chalk, 1);
@@ -199,8 +213,10 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
       drape([...seg([gx(0), 0.37], [gx(0.052), 0.37], 4), ...seg([gx(0.052), 0.37], [gx(0.052), 0.63], 8), ...seg([gx(0.052), 0.63], [gx(0), 0.63], 4)], chalk, 1);
     }
     const seamPts: [number, number][] = Array.from({ length: MY + 1 }, (_, my) => [seam[my], my / MY]);
-    ctx.save(); ctx.shadowColor = "rgba(255,255,255,.8)"; ctx.shadowBlur = 8; drape(seamPts, "rgba(255,255,255,.92)", 1.6); ctx.restore();
+    if (lightStage) { drape(seamPts, "rgba(255,255,255,.95)", 4.5); drape(seamPts, "#17203a", 2); }
+    else { ctx.save(); ctx.shadowColor = "rgba(255,255,255,.8)"; ctx.shadowBlur = 8; drape(seamPts, "rgba(255,255,255,.92)", 1.6); ctx.restore(); }
 
+    const gold = lightStage ? "194,122,0" : "255,214,102";
     // goals: a wash of the scorer's colour over the stage, shock rings and a gold beacon at the goal mouth
     for (const g of goals) {
       const age = t - g.t; if (age < -2 || age > GOAL_SHOW_S) continue;
@@ -208,27 +224,27 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
       const u = g.team === "us" ? 0.955 : 0.045; const p = proj(u, 0.5, zAt(u, 0.5) + 0.02);
       if (age >= 0 && age < 14) {
         const k = 1 - age / 14; const wash = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], Math.max(w, h) * 0.9);
-        wash.addColorStop(0, `rgba(${c.join(",")},${0.42 * k})`); wash.addColorStop(0.5, `rgba(${c.join(",")},${0.12 * k})`); wash.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h); ctx.restore();
+        wash.addColorStop(0, `rgba(${c.join(",")},${0.42 * k})`); wash.addColorStop(0.5, `rgba(${c.join(",")},${0.12 * k})`); wash.addColorStop(1, lightStage ? "rgba(255,255,255,0)" : "rgba(0,0,0,0)");
+        ctx.save(); ctx.globalCompositeOperation = lightStage ? "multiply" : "lighter"; ctx.fillStyle = wash; ctx.fillRect(0, 0, w, h); ctx.restore();
       }
       if (age >= 0) for (const lag of [0, 9, 18]) {
         const a = age - lag; if (a < 0 || a > 40) continue;
-        ctx.beginPath(); ctx.arc(p[0], p[1], 8 + a * 3.2, 0, Math.PI * 2); ctx.strokeStyle = `rgba(255,214,102,${0.9 * (1 - a / 40)})`; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.beginPath(); ctx.arc(p[0], p[1], 8 + a * 3.2, 0, Math.PI * 2); ctx.strokeStyle = `rgba(${gold},${0.9 * (1 - a / 40)})`; ctx.lineWidth = 2.5; ctx.stroke();
       }
       const fade = Math.max(0, Math.min(1, (GOAL_SHOW_S - age) / 20));
       const beam = ctx.createLinearGradient(p[0], p[1], p[0], p[1] - h * 0.5);
-      beam.addColorStop(0, `rgba(255,214,102,${0.75 * fade})`); beam.addColorStop(1, "rgba(255,214,102,0)");
+      beam.addColorStop(0, `rgba(${gold},${0.75 * fade})`); beam.addColorStop(1, `rgba(${gold},0)`);
       ctx.fillStyle = beam; ctx.fillRect(p[0] - 2, p[1] - h * 0.5, 4, h * 0.5);
-      ctx.save(); ctx.shadowColor = "#ffd666"; ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,214,102,${fade})`; ctx.fill(); ctx.restore();
+      ctx.save(); ctx.shadowColor = `rgb(${gold})`; ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); ctx.fillStyle = `rgba(${gold},${fade})`; ctx.fill(); ctx.restore();
     }
 
     // end labels
     if (w < 520) return;
-    ctx.font = `600 10px ${getComputedStyle(cv).fontFamily}`; ctx.fillStyle = "rgba(255,255,255,.5)";
+    ctx.font = `600 10px ${getComputedStyle(cv).fontFamily}`; ctx.fillStyle = lightStage ? "rgba(23,32,58,.55)" : "rgba(255,255,255,.5)";
     const la = proj(0, 1, 0), lb = proj(1, 1, 0);
     ctx.textAlign = "left"; ctx.fillText(`${names.us.toUpperCase()} GOAL`, la[0], la[1] - 10);
     ctx.textAlign = "right"; ctx.fillText(`${names.them.toUpperCase()} GOAL`, lb[0], lb[1] - 10);
-  }, [sample, pal, goals, names, cUs, cThem]);
+  }, [sample, pal, goals, names, cUs, cThem, lightStage]);
 
   const drawSpark = useCallback(() => {
     const cv = spark.current; if (!cv) return;
@@ -242,12 +258,14 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
       ctx.beginPath(); ctx.moveTo(0, mid);
       for (let i = 0; i < flow.n; i++) { const t = flow.t0 + i * flow.step; const v = live(t) ? Math.max(0, flow.m[i] * sign) : 0; ctx.lineTo(X(t), mid - sign * v * amp); }
       ctx.lineTo(w, mid); ctx.closePath(); ctx.fillStyle = `rgba(${c.join(",")},.85)`; ctx.fill();
+      if (lightStage) { ctx.strokeStyle = "rgba(23,32,58,.35)"; ctx.lineWidth = 1; ctx.stroke(); }
     }
-    ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.fillRect(0, mid - 0.5, w, 1);
-    if (flow.halves.length > 1) { ctx.fillStyle = "rgba(255,255,255,.06)"; ctx.fillRect(X(flow.halves[0][1]), 0, X(flow.halves[1][0]) - X(flow.halves[0][1]), h); }
-    for (const g of goals) { ctx.beginPath(); ctx.arc(X(g.t), g.team === "us" ? 4 : h - 4, 3.2, 0, Math.PI * 2); ctx.fillStyle = "#ffd666"; ctx.fill(); }
-    const x = X(tRef.current); ctx.fillStyle = "#fff"; ctx.fillRect(x - 0.75, 0, 1.5, h); ctx.beginPath(); ctx.arc(x, mid, 3.5, 0, Math.PI * 2); ctx.fill();
-  }, [flow, goals, cUs, cThem, tStart, tStop]);
+    const ink = lightStage ? "23,32,58" : "255,255,255";
+    ctx.fillStyle = `rgba(${ink},.22)`; ctx.fillRect(0, mid - 0.5, w, 1);
+    if (flow.halves.length > 1) { ctx.fillStyle = `rgba(${ink},.06)`; ctx.fillRect(X(flow.halves[0][1]), 0, X(flow.halves[1][0]) - X(flow.halves[0][1]), h); }
+    for (const g of goals) { ctx.beginPath(); ctx.arc(X(g.t), g.team === "us" ? 4 : h - 4, 3.2, 0, Math.PI * 2); ctx.fillStyle = lightStage ? "#c27a00" : "#ffd666"; ctx.fill(); }
+    const x = X(tRef.current); ctx.fillStyle = `rgb(${ink})`; ctx.fillRect(x - 0.75, 0, 1.5, h); ctx.beginPath(); ctx.arc(x, mid, 3.5, 0, Math.PI * 2); ctx.fill();
+  }, [flow, goals, cUs, cThem, tStart, tStop, lightStage]);
 
   const sync = useCallback(() => {
     const t = tRef.current;
@@ -299,7 +317,7 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
   const css = { "--flow-us": `rgb(${cUs.join(",")})`, "--flow-them": `rgb(${cThem.join(",")})` } as React.CSSProperties;
 
   return (
-    <div className="flow" ref={wrap} style={css}>
+    <div className={`flow ${lightStage ? "light" : ""}`} ref={wrap} style={css}>
       <div className="flow-score">
         {(["us", "them"] as const).map((side) => (
           <div className="side" key={side}>

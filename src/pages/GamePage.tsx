@@ -30,6 +30,30 @@ import { copyText, shareUrl } from "../lib/links";
 import { openUrl, providerLabel, resolveSource } from "../lib/sources";
 import { computeXg, XG_MODEL_VERSION } from "../lib/xg";
 
+/** An estimate of how far a run is: the worker's own figure, else read off its stage text (older
+ *  worker code), else elapsed time against a typical 100-minute run. */
+function RunProgress({ run }: { run: import("../lib/types").StatRun }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => tick((n) => n + 1), 15000); return () => clearInterval(t); }, []);
+  if (run.status !== "running" || !run.started_at) return null;
+  const elapsedMin = (Date.now() - new Date(run.started_at).getTime()) / 60000;
+  const stage = typeof run.params?.stage === "string" ? run.params.stage : "";
+  let p = typeof run.params?.progress === "number" ? run.params.progress : null;
+  const p1 = stage.match(/pass 1 of 2: (\d+) of (\d+) min/), p2 = stage.match(/pass 2 of 2: window (\d+) of (\d+)/);
+  if (p == null && p1) p = 0.04 + 0.52 * (Number(p1[1]) / Math.max(1, Number(p1[2])));
+  if (p == null && p2) p = 0.56 + 0.42 * (Number(p2[1]) / Math.max(1, Number(p2[2])));
+  const guessed = p == null;
+  if (p == null) p = Math.min(0.95, elapsedMin / 100);
+  p = Math.min(0.99, Math.max(0.01, p));
+  const left = !guessed && p > 0.08 ? Math.max(1, Math.round(elapsedMin / p - elapsedMin)) : null;
+  return (
+    <div className="run-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(p * 100)} aria-label="Analysis progress (estimate)">
+      <div className="bar"><i style={{ width: `${p * 100}%` }} /></div>
+      <span>{guessed ? "~" : ""}{Math.round(p * 100)}%{left != null ? ` · about ${left} min left` : ` · ${Math.round(elapsedMin)} min so far`}</span>
+    </div>
+  );
+}
+
 /** What a wide-camera run found, and how it did against the goals already on the game. */
 function FixedRunSummary({ run }: { run: import("../lib/types").StatRun }) {
   const f = run.params?.fixed as undefined | {
@@ -372,6 +396,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                           <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
                           <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.status === "running" && typeof r.params?.stage === "string" ? ` · ${r.params.stage}` : ""}{r.error ? ` · ${r.error}` : ""}</span>
                           {r.status === "queued" ? <button className="btn sm" onClick={async () => { await api.cancelQueuedRun(r.id); reload(); }}>Cancel</button> : <span />}
+                          <RunProgress run={r} />
                           <FixedRunSummary run={r} />
                         </div>
                       ))}

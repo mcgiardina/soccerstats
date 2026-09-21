@@ -108,7 +108,12 @@ def people_in(img, model, device, band, zoom_band=None):
     return dd
 
 
-def analyse(raw_path, calib, light_is_us, progress=lambda msg: None, limit_seconds=None):
+# Shares of a run's wall time, from the first full run on the mini (3 min download, 60 min first
+# pass, ~50 min second pass): used only for the progress bar in the app.
+P_FETCH, P_PASS1, P_PASS2 = 0.04, 0.56, 0.98
+
+
+def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, limit_seconds=None):
     import contextlib, io
     from . import detect
     with contextlib.redirect_stdout(io.StringIO()):
@@ -137,7 +142,8 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg: None, limit_secon
         if i % step == 0:
             rows.append({"t": round(float(t), 2), "p": people_in(img, model, device, band)})
         if i % int(fps * 300) == 0:
-            progress(f"pass 1 of 2: {int(t // 60)} of {int(total_s // 60)} min ({(time.time() - began) / 60:.0f} min so far)")
+            progress(f"pass 1 of 2: {int(t // 60)} of {int(total_s // 60)} min ({(time.time() - began) / 60:.0f} min so far)",
+                     P_FETCH + (P_PASS1 - P_FETCH) * min(1.0, t / max(total_s, 1.0)))
     for w in watchers:
         w.finish()
     activity = {w.name: sorted(float(p[0]) for tr in w.done for p in tr) for w in watchers}
@@ -159,8 +165,7 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg: None, limit_secon
             if j % max(1, int(round(fps / 2))) == 0:
                 seq.append({"t": round(float(t), 2), "p": people_in(img, model, device, band, zoom_band=calib.get("far_band"))})
         windows.append(seq)
-        if k % 5 == 0:
-            progress(f"pass 2 of 2: window {k + 1} of {len(nominated)}")
+        progress(f"pass 2 of 2: window {k + 1} of {len(nominated)}", P_PASS1 + (P_PASS2 - P_PASS1) * (k + 1) / len(nominated))
     cap.release()
     to_field = lambda px: fieldmap.to_field(px, calib["cam"], size)
     v2 = kickoffs.own_half_restarts(windows, to_field, calib["field"])
@@ -176,7 +181,9 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg: None, limit_secon
 
 def main(game, main_video, wide, run, args):
     calib = calibration(wide, game["id"])
-    say = lambda msg: (print(msg, flush=True), db.update_run_params(run["id"], {"stage": msg}))
+    def say(msg, frac=None):
+        print(msg, flush=True)
+        db.update_run_params(run["id"], {"stage": msg, **({"progress": round(float(frac), 3)} if frac is not None else {})})
     try:
         try:
             import av  # noqa: F401
@@ -186,9 +193,9 @@ def main(game, main_video, wide, run, args):
             subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "av>=12"])
         light_is_us = us_is_light(game)
         ref = main_video.get("stream_url") or fetch.download_video(main_video)
-        say("fetching the camera's full-field file")
+        say("fetching the camera's full-field file", 0.0)
         raw = fetch_raw(wide["raw_url"], wide.get("provider_ref") or game["id"])
-        say("matching the two clocks by their audio")
+        say("matching the two clocks by their audio", P_FETCH - 0.01)
         offset, spread = clocks.offset(ref, raw)
         if spread > 1.0:
             raise RuntimeError(f"the audio of the two recordings does not line up (probes disagree by {spread:.1f} s)")
@@ -203,7 +210,7 @@ def main(game, main_video, wide, run, args):
         if args.dry_run:
             print(json.dumps(summary, indent=1)); return 0
         summary["compare"] = write(game["id"], run["id"], main_video, goals, flow_doc, summary["halves"])
-        db.update_run_params(run["id"], {"fixed": summary, "stage": "done"})
+        db.update_run_params(run["id"], {"fixed": summary, "stage": "done", "progress": 1.0})
         db.finish_run(run["id"], "done")
         print(json.dumps(summary, indent=1))
         return 0
