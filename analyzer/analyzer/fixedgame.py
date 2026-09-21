@@ -24,9 +24,10 @@ import time
 import cv2
 import numpy as np
 
-from . import clocks, db, fetch, fieldmap, fixedcam, flow, kickoffs
+from . import ballplay, clocks, db, fetch, fieldmap, fixedcam, flow, kickoffs
 
 CALIB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "calib", "fixed")
+OWNER_SHADE = lambda p: kickoffs.classify(p, dark_v=138)   # the valley between the two kits' brightness
 GOAL_LABEL = "machine goal (from the kick-off that followed; wide camera)"
 
 
@@ -73,7 +74,7 @@ def _tiles(width, n=3, overlap=180):
     return [(max(0, i * (w - overlap)), min(width, i * (w - overlap) + w)) for i in range(n)]
 
 
-def people_in(img, model, device, band, zoom_band=None):
+def people_in(img, model, device, band, zoom_band=None, conf=0.3):
     """[[x, y_feet, height, V, S, cls], ...] in source pixels. The pitch band is cut into three
     overlapping tiles so far-side players keep enough pixels; zoom_band adds a 2x pass over the far
     side (used for the dense windows, where every player matters)."""
@@ -86,7 +87,7 @@ def people_in(img, model, device, band, zoom_band=None):
             a = min(a + 300, img.shape[1] - 1200)
             crops.append(cv2.resize(img[zoom_band[0]:zoom_band[1], a:a + 1200], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)); offs.append((a, zoom_band[0], 0.5))
     out = []
-    for (ox, oy, sc), crop, r in zip(offs, crops, model.predict(crops, device=device, verbose=False, conf=0.3, imgsz=1280)):
+    for (ox, oy, sc), crop, r in zip(offs, crops, model.predict(crops, device=device, verbose=False, conf=conf, imgsz=1280)):
         if r.boxes is None:
             continue
         for bx, c in zip(r.boxes.xyxy.tolist(), r.boxes.cls.tolist()):
@@ -110,7 +111,7 @@ def people_in(img, model, device, band, zoom_band=None):
 
 # Shares of a run's wall time, from the first full run on the mini (3 min download, 60 min first
 # pass, ~50 min second pass): used only for the progress bar in the app.
-P_FETCH, P_PASS1, P_PASS2 = 0.04, 0.56, 0.98
+P_FETCH, P_PASS1, P_WINDOWS, P_DONE = 0.04, 0.55, 0.85, 0.98
 
 
 def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, limit_seconds=None):
@@ -128,6 +129,9 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
     total_s = (cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0) / fps
     band, x_mid, y_range = calib["band"], calib["x_mid"], calib["y_range"]
     watchers = [fixedcam.GoalWatcher(n, g, size) for n, g in calib["goals"].items()]
+    # the ball in open play, as flights (ballplay.py): possession, turnovers, passes
+    ball = ballplay.FieldTracker(calib["cam"], size, calib.get("play_band") or band, field=calib["field"])
+    flights = []
     rows, i, step, began = [], 0, int(round(fps * 2)), time.time()
     while cap.grab():
         i += 1
@@ -139,10 +143,13 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
             break
         for w in watchers:
             w.feed(t, img)
+        ball.feed(t, img)
+        if i % 60 == 0:
+            flights += ball.pop_flights()
         if i % step == 0:
             rows.append({"t": round(float(t), 2), "p": people_in(img, model, device, band)})
         if i % int(fps * 300) == 0:
-            progress(f"pass 1 of 2: {int(t // 60)} of {int(total_s // 60)} min ({(time.time() - began) / 60:.0f} min so far)",
+            progress(f"pass 1 of 3: {int(t // 60)} of {int(total_s // 60)} min ({(time.time() - began) / 60:.0f} min so far)",
                      P_FETCH + (P_PASS1 - P_FETCH) * min(1.0, t / max(total_s, 1.0)))
     for w in watchers:
         w.finish()
@@ -150,6 +157,7 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
     attacks = []
     for w in watchers:
         attacks += w.candidates()
+    ball.finish(); flights += ball.pop_flights(); flights.sort(key=lambda f: f["t0"])
 
     # restarts: coarse rule, then the dense second stage on the nominated windows
     v1 = kickoffs.restarts(rows, x_mid, y_range)
@@ -165,8 +173,7 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
             if j % max(1, int(round(fps / 2))) == 0:
                 seq.append({"t": round(float(t), 2), "p": people_in(img, model, device, band, zoom_band=calib.get("far_band"))})
         windows.append(seq)
-        progress(f"pass 2 of 2: window {k + 1} of {len(nominated)}", P_PASS1 + (P_PASS2 - P_PASS1) * (k + 1) / len(nominated))
-    cap.release()
+        progress(f"pass 2 of 3: window {k + 1} of {len(nominated)}", P_PASS1 + (P_WINDOWS - P_PASS1) * (k + 1) / len(nominated))
     to_field = lambda px: fieldmap.to_field(px, calib["cam"], size)
     v2 = kickoffs.own_half_restarts(windows, to_field, calib["field"])
     merged = kickoffs.merge(v1, v2)
@@ -175,8 +182,22 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
     half_list = flow.halves(rows, real, x_mid, y_range)
     in_play = [r for r in real if any(h[0] - 90 <= r["t"] <= h[1] for h in half_list)]
     goals = [g for g in kickoffs.goals(in_play, activity, us_is_light=light_is_us) if g["kind"] == "goal"]
+
+    # who struck each flight and who it reached: look at the players at both ends
+    flights = [f for f in flights if any(h[0] <= f["t0"] <= h[1] for h in half_list)]   # warm-ups and the break are not the game
+    for k, f in enumerate(flights):
+        for end in ("a", "b"):
+            t_look, probes = ballplay.end_probes(f, end)
+            cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, t_look) * 1000); ok, img = cap.read()
+            # Looser than the kick-off rules on purpose: dark shirts on dark turf are found ~30% less often
+            # than white ones at the usual settings, which would hand the white team possession it never had.
+            f[end] = ballplay.owner_at(people_in(img, model, device, band, zoom_band=calib.get("far_band"), conf=0.15), probes, OWNER_SHADE)[0] if ok else None
+        if k % 25 == 0:
+            progress(f"pass 3 of 3: ball flight {k + 1} of {len(flights)}", P_WINDOWS + (P_DONE - P_WINDOWS) * (k + 1) / max(1, len(flights)))
+
+    cap.release()
     return {"rows": rows, "attacks": attacks, "restarts": real, "dropped_lineups": len(merged) - len(real), "halves": half_list,
-            "goals": goals, "size": size, "nominated": len(nominated), "minutes": round((time.time() - began) / 60)}
+            "goals": goals, "size": size, "nominated": len(nominated), "minutes": round((time.time() - began) / 60), "flights": flights}
 
 
 def main(game, main_video, wide, run, args):
@@ -207,9 +228,11 @@ def main(game, main_video, wide, run, args):
         summary = {"pipeline": "fixed", "clock_offset_s": round(offset, 2), "minutes": res["minutes"], "nominated_windows": res["nominated"],
                    "restarts": [to_film(r["t"]) for r in res["restarts"]], "lineups_that_never_broke": res["dropped_lineups"],
                    "halves": [[to_film(h[0]), to_film(h[1])] for h in res["halves"]], "goals": goals}
+        play = play_stats(res["flights"], res["halves"], calib["field"], light_is_us, to_film)
+        summary["ball"] = play["summary"]; summary["spot_check"] = play["spot_check"]
         if args.dry_run:
             print(json.dumps(summary, indent=1)); return 0
-        summary["compare"] = write(game["id"], run["id"], main_video, goals, flow_doc, summary["halves"])
+        summary["compare"] = write(game["id"], run["id"], main_video, goals, flow_doc, summary["halves"], play)
         db.update_run_params(run["id"], {"fixed": summary, "stage": "done", "progress": 1.0})
         db.finish_run(run["id"], "done")
         print(json.dumps(summary, indent=1))
@@ -224,7 +247,49 @@ def main(game, main_video, wide, run, args):
             pass
 
 
-def write(game_id, run_id, main_video, goals, flow_doc, halves):
+def play_stats(flights, half_list, field, light_is_us, to_film):
+    """team_stats rows, pass_events rows and a spot-check sample from the ball flights.
+    Coordinates of a pass are attack-normalised for the passing team, like shots: x toward the goal
+    being attacked, y down the screen of a map drawn with that team attacking to the right."""
+    side = lambda shade: ("us" if (shade == "light") == light_is_us else "them") if shade else None
+    x0, x1, y0, y1 = field
+    per_half = ballplay.read_play(flights, [(h[0], h[1]) for h in half_list])
+    rows, summary = [], {"flights": len(flights), "ends_read": sum(1 for f in flights for e in ("a", "b") if f.get(e))}
+    periods = [("h1", per_half[:1]), ("h2", per_half[1:2]), ("full", per_half)]
+    lengths = {"h1": [h[1] - h[0] for h in half_list[:1]], "h2": [h[1] - h[0] for h in half_list[1:2]], "full": [h[1] - h[0] for h in half_list]}
+    for name, parts in periods:
+        if not parts:
+            continue
+        held = {k: sum(p["held_s"][k] for p in parts) for k in ("light", "dark")}
+        known = held["light"] + held["dark"]
+        for shade in ("light", "dark"):
+            rows.append({"team": side(shade), "period": name,
+                         "possession_pct": round(100 * held[shade] / known, 1) if known > 60 else None,
+                         "turnovers": sum(len(p["turnovers"][shade]) for p in parts),
+                         "passes": sum(p["passes"][shade][1] for p in parts), "passes_completed": sum(p["passes"][shade][0] for p in parts),
+                         "ball_coverage": round(known / max(1.0, sum(lengths[name])), 3)})
+        summary[name] = {"possession_us": next((r["possession_pct"] for r in rows if r["period"] == name and r["team"] == "us"), None),
+                         "read_share": round(known / max(1.0, sum(lengths[name])), 2)}
+    passes = []
+    for f in flights:
+        hf = next((h for h in half_list if h[0] <= f["t0"] <= h[1]), None)
+        if hf is None or not f.get("a") or not f.get("b"):
+            continue
+        attacks_right = (hf[2] == "left") == (f["a"] == "light")   # a team attacks away from the side it lines up on
+        def norm(xy):
+            u, v = (xy[0] - x0) / (x1 - x0), (xy[1] - y0) / (y1 - y0)
+            u, v = float(np.clip(u, 0, 1)), float(np.clip(v, 0, 1))
+            return (round(u, 3), round(1 - v, 3)) if attacks_right else (round(1 - u, 3), round(v, 3))
+        (fx, fy), (tx, ty) = norm(f["xy0"]), norm(f["xy1"])
+        passes.append({"t": to_film(f["t0"]), "team": side(f["a"]), "completed": f["a"] == f["b"], "outcome": "completed" if f["a"] == f["b"] else "intercepted",
+                       "from_x": fx, "from_y": fy, "to_x": tx, "to_y": ty, "third": "def" if fx < 1 / 3 else "mid" if fx < 2 / 3 else "att", "confidence": 0.6})
+    both = [f for f in flights if f.get("a") and f.get("b") and any(h[0] <= f["t0"] <= h[1] for h in half_list)]
+    pick = [both[int(k * len(both) / 16)] for k in range(16)] if len(both) >= 16 else both
+    spot = [{"t": to_film(f["t0"]), "from": side(f["a"]), "to": side(f["b"])} for f in pick]
+    return {"team_stats": rows, "passes": passes, "summary": summary, "spot_check": spot}
+
+
+def write(game_id, run_id, main_video, goals, flow_doc, halves, play=None):
     c = db.client()
     # only this pipeline's own unreviewed proposals are replaced; scoreboard goals and human tags stay
     c.table("tags").delete().eq("game_id", game_id).eq("source", "machine").is_("confirmed", "null").eq("label", GOAL_LABEL).execute()
@@ -254,4 +319,13 @@ def write(game_id, run_id, main_video, goals, flow_doc, halves):
         if len(halves) > 1:
             patch.update({"second_half_offset_seconds": round(halves[1][0]), "fulltime_offset_seconds": round(halves[1][1])})
         c.table("videos").update(patch).eq("id", main_video["id"]).execute()
+    if play:
+        # machine possession / turnovers / passes replace the last machine figures; human-adjusted rows stay
+        c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
+        if play["team_stats"]:
+            c.table("team_stats").insert([{**r, "game_id": game_id, "run_id": run_id, "source": "machine"} for r in play["team_stats"]]).execute()
+        c.table("pass_events").delete().eq("game_id", game_id).execute()
+        rows_p = db.pass_rows(game_id, run_id, play["passes"])
+        for k in range(0, len(rows_p), 200):
+            c.table("pass_events").insert(rows_p[k:k + 200]).execute()
     return {"known_goals": compare, "machine_goals_with_no_known_goal": extra}

@@ -577,3 +577,8 @@ pre.chapters { background: var(--surface-2); border: 1px solid var(--line); bord
 .run-bar .bar i { display: block; height: 100%; border-radius: 3px; background-color: var(--accent); transition: width 1s linear; background-image: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); background-size: 200% 100%; animation: run-sheen 2.2s linear infinite; }
 @keyframes run-sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .run-bar .bar i { animation: none; } }
+
+/* spot-check list under an analysis run */
+.spot summary { cursor: pointer; font-size: .78rem; font-weight: 700; color: var(--link); }
+.spot-row { display: grid; grid-template-columns: auto 1fr auto; gap: .5rem; align-items: center; padding: .3rem 0; border-top: 1px solid var(--line); }
+.spot-marks { display: flex; gap: .25rem; } .spot-marks .btn.on { box-shadow: inset 0 0 0 2px currentColor; }

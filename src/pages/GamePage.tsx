@@ -54,9 +54,37 @@ function RunProgress({ run }: { run: import("../lib/types").StatRun }) {
   );
 }
 
+/** Possession has no answer key, so the run hands over a sample of its own calls to be marked right
+ *  or wrong against the film. The tally is the honest accuracy figure for its ball reading. */
+function SpotCheck({ run, names, onSeek, onSaved }: { run: import("../lib/types").StatRun; names: { us: string; them: string }; onSeek: (t: number) => void; onSaved: () => void }) {
+  const f = run.params?.fixed as undefined | { spot_check?: { t: number; from: "us" | "them"; to: "us" | "them" }[] };
+  const items = f?.spot_check ?? [];
+  const answers = (run.params?.spot_answers ?? {}) as Record<string, boolean>;
+  if (!items.length) return null;
+  const marked = Object.values(answers), right = marked.filter(Boolean).length;
+  const mark = async (i: number, ok: boolean) => { await api.mergeRunParams(run.id, { spot_answers: { ...answers, [i]: ok } }); onSaved(); };
+  return (
+    <details className="spot" style={{ gridColumn: "1 / -1" }}>
+      <summary>Check the ball reading · {marked.length ? `${right} of ${marked.length} right so far` : `${items.length} moments to mark`}</summary>
+      <p className="tiny muted" style={{ margin: ".3rem 0" }}>Possession, turnovers and passes come from ball flights the wide camera saw. Watch each moment and mark whether the machine has the two teams right.</p>
+      {items.map((it, i) => (
+        <div key={i} className="spot-row">
+          <button className="btn sm" onClick={() => onSeek(Math.max(0, it.t - 2))} title="Watch">▶ {fmtClock(it.t)}</button>
+          <span className="small">{names[it.from]} played it, {it.from === it.to ? "and kept it" : <>and <strong>{names[it.to]}</strong> got it</>}</span>
+          <span className="spot-marks">
+            <button className={`btn sm ${answers[i] === true ? "ok on" : ""}`} onClick={() => mark(i, true)} aria-label="Right">✓</button>
+            <button className={`btn sm ${answers[i] === false ? "danger on" : ""}`} onClick={() => mark(i, false)} aria-label="Wrong">✗</button>
+          </span>
+        </div>
+      ))}
+    </details>
+  );
+}
+
 /** What a wide-camera run found, and how it did against the goals already on the game. */
 function FixedRunSummary({ run }: { run: import("../lib/types").StatRun }) {
   const f = run.params?.fixed as undefined | {
+    ball?: { flights?: number; full?: { possession_us?: number | null; read_share?: number } };
     minutes?: number; clock_offset_s?: number; goals?: { t: number; team: string | null }[];
     compare?: { known_goals?: { known_t: number; found: boolean; dt_s: number | null; team_right: boolean }[]; machine_goals_with_no_known_goal?: number[] };
   };
@@ -65,7 +93,7 @@ function FixedRunSummary({ run }: { run: import("../lib/types").StatRun }) {
   const found = known.filter((k) => k.found);
   return (
     <div className="tiny muted" style={{ gridColumn: "1 / -1", marginTop: ".1rem" }}>
-      Wide camera · {f.goals?.length ?? 0} goals found in {f.minutes ?? "?"} min{known.length ? <> · against the {known.length} goals already on this game: <strong>{found.length} found</strong>, {found.filter((k) => k.team_right).length} with the right team{found.length ? `, off by ${found.map((k) => `${k.dt_s! > 0 ? "+" : ""}${k.dt_s}s`).join(", ")}` : ""}{known.length - found.length ? ` · missed ${known.filter((k) => !k.found).map((k) => fmtClock(k.known_t)).join(", ")}` : ""}</> : null}{extra.length ? ` · ${extra.length} with no known goal nearby (${extra.map((t) => fmtClock(t)).join(", ")})` : " · no extra goals"}
+      Wide camera · {f.goals?.length ?? 0} goals found in {f.minutes ?? "?"} min{known.length ? <> · against the {known.length} goals already on this game: <strong>{found.length} found</strong>, {found.filter((k) => k.team_right).length} with the right team{found.length ? `, off by ${found.map((k) => `${k.dt_s! > 0 ? "+" : ""}${k.dt_s}s`).join(", ")}` : ""}{known.length - found.length ? ` · missed ${known.filter((k) => !k.found).map((k) => fmtClock(k.known_t)).join(", ")}` : ""}</> : null}{extra.length ? ` · ${extra.length} with no known goal nearby (${extra.map((t) => fmtClock(t)).join(", ")})` : " · no extra goals"}{f.ball?.flights ? ` · ${f.ball.flights} ball flights read${f.ball.full?.possession_us != null ? `, possession ≈ ${Math.round(f.ball.full.possession_us)}% from ${Math.round((f.ball.full.read_share ?? 0) * 100)}% of playing time` : ""}` : ""}
     </div>
   );
 }
@@ -429,6 +457,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                             : r.status === "running" ? <button className="btn sm danger" onClick={async () => { if (confirm("Stop this run? What it has worked out so far is thrown away.")) { await api.stopRun(r.id); showToast("Stopping: the worker ends it within half a minute"); reload(); } }}>Stop</button> : <span />}
                           <RunProgress run={r} />
                           <FixedRunSummary run={r} />
+                          <SpotCheck run={r} names={names} onSeek={seek} onSaved={reload} />
                         </div>
                       ))}
                     </div>

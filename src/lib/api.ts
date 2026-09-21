@@ -36,6 +36,12 @@ export async function cancelQueuedRun(runId: string): Promise<void> {
   unwrap(await supabase.from("stat_runs").delete().eq("id", runId).eq("status", "queued"));
 }
 
+/** Merge keys into a run's params (e.g. the admin's spot-check answers). */
+export async function mergeRunParams(runId: string, patch: Record<string, unknown>): Promise<StatRun> {
+  const cur = unwrap(await supabase.from("stat_runs").select("params").eq("id", runId).single()) as { params: Record<string, unknown> | null };
+  return unwrap(await supabase.from("stat_runs").update({ params: { ...(cur.params ?? {}), ...patch } }).eq("id", runId).select().single()) as StatRun;
+}
+
 /** Stop a run the worker has started: it checks this status every 20 s and ends the job. */
 export async function stopRun(runId: string): Promise<void> {
   unwrap(await supabase.from("stat_runs").update({ status: "cancelled", finished_at: new Date().toISOString(), error: "stopped from the app" }).eq("id", runId).eq("status", "running"));

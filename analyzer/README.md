@@ -206,3 +206,22 @@ writes goal proposals, `game_flow`, the periods (if unset) and `params.fixed.com
 up with the goals already on the game. Only its own earlier proposals are replaced; scoreboard goals and
 human tags are left alone. Line-ups that never break into play (warm-ups) are not kick-offs.
 A new venue or tripod spot needs a new calibration file; that step is still by hand.
+
+## Possession, turnovers and passes from the fixed view (ballplay.py) — experimental
+
+A ball at someone's feet cannot be told from the player; a ball that has been kicked can. `ballplay.FieldTracker`
+follows ball-sized specks of motion over the whole pitch, with "ball-sized" looked up per position from the camera
+model (4 px at the far touchline, ~36 px under the camera) and speed measured in ft/s on the ground. A FLIGHT is a
+speck that outruns any player (>= 30 ft/s for >= 12 ft, straight) and is on its own for most of the way: a hand, a head
+or a white sock is ball-sized too, but is always part of a bigger patch of motion. On a 5-minute test stretch: 24
+flights, and all 7 checked against the frames were the real ball, near and far side. Cost: ~3x real time on its own.
+
+Each end of a flight is then read for the nearest player's shirt (looser detector settings than the kick-off rules,
+because dark shirts on dark turf are found ~30% less often than white ones). Possession = who had it last, counted only
+while known (8 s carry after an event); a turnover = the ball going from one team to the other within 25 s; passes =
+flights with both ends read. Written to `team_stats` (possession_pct, turnovers, passes, ball_coverage) and
+`pass_events`, so the app's existing dials, rows and pass map fill in.
+
+NOT validated yet: there is no answer key for possession. Every run stores 16 of its own calls in
+`params.fixed.spot_check`; the Analysis tab lists them to be marked right or wrong against the film, and that tally is
+the accuracy figure. Known risk: a bias toward the lighter kit.

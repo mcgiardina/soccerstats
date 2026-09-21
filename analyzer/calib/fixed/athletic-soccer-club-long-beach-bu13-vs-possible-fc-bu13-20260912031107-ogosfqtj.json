@@ -46,5 +46,9 @@
   700,
   1000
  ],
- "note": "ASC LB v Possible FC, Cabrillo HS, 2026-09-20. BallerCam panoramic 3840x2160, tripod near halfway. Camera fitted from the football yard lines and numerals (fieldmap.fit); goals and halfway line picked by hand."
+ "note": "ASC LB v Possible FC, Cabrillo HS, 2026-09-20. BallerCam panoramic 3840x2160, tripod near halfway. Camera fitted from the football yard lines and numerals (fieldmap.fit); goals and halfway line picked by hand.",
+ "play_band": [
+  740,
+  1700
+ ]
 }
