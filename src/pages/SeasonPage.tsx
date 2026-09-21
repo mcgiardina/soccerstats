@@ -100,7 +100,7 @@ export default function SeasonPage() {
                   {hasScore ? <span className={`score pill ${cls}`}>{s.us.goals}–{s.them.goals}</span> : <span className="badge plain">no score</span>}
                 </div>
                 {(!g.published || !v) ? <div className="row" style={{ gap: ".4rem", marginTop: ".4rem" }}>
-                  {!g.published ? <span className="badge draft">draft</span> : null}
+                  {!g.published ? <span className="badge draft">Draft</span> : null}
                   {!v ? <span className="badge">no video</span> : null}
                 </div> : null}
               </div>
