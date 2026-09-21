@@ -167,7 +167,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       if (t.team !== "us" && t.team !== "them") continue;
       const kind: FlowEvent["kind"] | null = t.type === "shot" || t.type === "penalty" ? (onTarget.get(t.id) ? "shot_on_target" : "shot")
         : t.type === "goal" ? "shot_on_target" : t.type === "save" ? "save" : t.type === "corner" ? "corner" : t.type === "free_kick" ? "free_kick"
-        : t.type === "note" && /\bcard\b/i.test(t.label ?? "") ? "card" : null;
+        : t.type === "foul" ? "foul" : t.type === "yellow_card" || t.type === "red_card" || (t.type === "note" && /\bcard\b/i.test(t.label ?? "")) ? "card" : null;
       if (kind) out.push({ t: t.t_seconds, team: t.team, kind });
     }
     return out;
@@ -441,7 +441,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           <summary>Tagging keys</summary>
           <div className="keys" style={{ marginTop: ".4rem" }}>
             {HOTKEYS.map((h) => <span key={h.key}><kbd>{h.key}</kbd> <span className="tiny">{TAG_LABELS[h.type]}</span></span>)}
-            <span><kbd>⇧</kbd> <span className="tiny">+key = {names.them}</span></span>
+            <span><kbd>⇧</kbd> <span className="tiny">+key = {names.them} (fouls and cards: the team that committed it)</span></span>
             <span><kbd>space</kbd> <span className="tiny">play/pause</span></span>
             <span><kbd>←</kbd><kbd>→</kbd> <span className="tiny">±5s (⇧ ±30s)</span></span>
           </div>

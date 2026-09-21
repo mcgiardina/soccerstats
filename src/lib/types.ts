@@ -2,15 +2,18 @@ export type Team = "us" | "them";
 export type Period = "full" | "h1" | "h2";
 export type TagType =
   | "goal" | "shot" | "chance" | "save" | "turnover"
-  | "corner" | "free_kick" | "throw_in" | "penalty" | "note";
+  | "corner" | "free_kick" | "throw_in" | "penalty" | "foul" | "yellow_card" | "red_card" | "note";
 export type SetPieceOutcome = "goal" | "shot" | "cleared" | "lost";
 
 export const SET_PIECE_TYPES: TagType[] = ["corner", "free_kick", "throw_in", "penalty"];
+/** Fouls and cards belong to the team that committed them. */
+export const DISCIPLINE_TYPES: TagType[] = ["foul", "yellow_card", "red_card"];
 export const SHOT_LIKE_TYPES: TagType[] = ["shot", "goal", "penalty"];
 
 export const TAG_LABELS: Record<TagType, string> = {
   goal: "Goal", shot: "Shot", chance: "Chance", save: "Save", turnover: "Turnover",
-  corner: "Corner", free_kick: "Free kick", throw_in: "Throw-in", penalty: "Penalty", note: "Note",
+  corner: "Corner", free_kick: "Free kick", throw_in: "Throw-in", penalty: "Penalty",
+  foul: "Foul", yellow_card: "Yellow card", red_card: "Red card", note: "Note",
 };
 
 export interface Game {

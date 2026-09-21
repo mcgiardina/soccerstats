@@ -11,6 +11,9 @@ export const HOTKEYS: { key: string; type: TagType }[] = [
   { key: "f", type: "free_kick" },
   { key: "i", type: "throw_in" },
   { key: "p", type: "penalty" },
+  { key: "u", type: "foul" },
+  { key: "y", type: "yellow_card" },
+  { key: "r", type: "red_card" },
   { key: "n", type: "note" },
 ];
 

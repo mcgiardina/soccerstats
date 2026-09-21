@@ -16,7 +16,7 @@ export function buildChapters(video: Video, tags: Tag[]): string {
   if (video.fulltime_offset_seconds != null) entries.push({ t: video.fulltime_offset_seconds, label: "Full time" });
 
   for (const tag of trustedTags(tags).filter((t) => !t.video_id || t.video_id === video.id)) {
-    if (tag.type === "turnover" || tag.type === "throw_in") continue; // too noisy for chapters
+    if (tag.type === "turnover" || tag.type === "throw_in" || tag.type === "foul") continue; // too noisy for chapters
     const who = tag.team === "us" ? "us" : tag.team === "them" ? "them" : "";
     const base = TAG_LABELS[tag.type] ?? tag.type;
     const outcome = tag.outcome ? ` (${tag.outcome})` : "";

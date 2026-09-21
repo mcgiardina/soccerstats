@@ -26,6 +26,7 @@ const FILTERS: { key: string; label: string; types: string[] | null }[] = [
   { key: "goals", label: "Goals", types: ["goal"] },
   { key: "shots", label: "Shots", types: ["shot", "goal", "chance", "save", "penalty"] },
   { key: "setpieces", label: "Set pieces", types: SET_PIECE_TYPES },
+  { key: "discipline", label: "Fouls & cards", types: ["foul", "yellow_card", "red_card"] },
   { key: "notes", label: "Notes", types: ["note"] },
 ];
 

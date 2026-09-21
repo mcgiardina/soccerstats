@@ -42,6 +42,9 @@ export default function StatsPanel({ s, compact, opponent }: { s: GameSummary; c
                 <tr><V v={s.us.freeKicks} /><td className="lbl">Free kicks</td><V v={s.them.freeKicks} /></tr>
                 {(s.us.penalties || s.them.penalties) ? <tr><V v={s.us.penalties} /><td className="lbl">Penalties</td><V v={s.them.penalties} /></tr> : null}
               </> : null}
+              {(s.us.fouls || s.them.fouls) ? <tr><V v={s.us.fouls} /><td className="lbl">Fouls</td><V v={s.them.fouls} /></tr> : null}
+              {(s.us.yellowCards || s.them.yellowCards) ? <tr><V v={s.us.yellowCards} /><td className="lbl">Yellow cards</td><V v={s.them.yellowCards} /></tr> : null}
+              {(s.us.redCards || s.them.redCards) ? <tr><V v={s.us.redCards} /><td className="lbl">Red cards</td><V v={s.them.redCards} /></tr> : null}
             </>
           ) : null}
         </tbody>

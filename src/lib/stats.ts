@@ -30,6 +30,10 @@ export interface SideSummary {
   turnoversSource: "machine" | "human_adjusted" | null;
   corners: number;
   freeKicks: number;
+  /** committed by this side */
+  fouls: number;
+  yellowCards: number;
+  redCards: number;
   setPieceGoals: number;
   /** saves made by this side's keeper (human 'save' tags + confirmed machine saves) */
   saves: number;
@@ -104,6 +108,9 @@ export function summarizeGame(
       turnoversSource: st?.turnovers != null ? st.source : null,
       corners: mine.filter((t) => t.type === "corner").length,
       freeKicks: mine.filter((t) => t.type === "free_kick").length,
+      fouls: mine.filter((t) => t.type === "foul").length,
+      yellowCards: mine.filter((t) => t.type === "yellow_card").length,
+      redCards: mine.filter((t) => t.type === "red_card").length,
       setPieceGoals: mine.filter((t) => SET_PIECE_TYPES.includes(t.type) && t.outcome === "goal").length,
       saves: mine.filter((t) => t.type === "save").length,
       chances: mine.filter((t) => t.type === "chance").length,

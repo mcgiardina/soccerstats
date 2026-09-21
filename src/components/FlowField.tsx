@@ -6,10 +6,10 @@ import { useTheme } from "../lib/theme";
 
 export interface FlowGoal { t: number; team: "us" | "them" }
 /** Tagged events other than goals, for the running stats panel, the strip's ticks and shot spikes. */
-export interface FlowEvent { t: number; team: "us" | "them"; kind: "shot" | "shot_on_target" | "save" | "corner" | "free_kick" | "card" }
+export interface FlowEvent { t: number; team: "us" | "them"; kind: "shot" | "shot_on_target" | "save" | "corner" | "free_kick" | "foul" | "card" }
 const STAT_ROWS: { label: string; kinds: FlowEvent["kind"][] }[] = [
   { label: "Shots", kinds: ["shot", "shot_on_target"] }, { label: "On target", kinds: ["shot_on_target"] }, { label: "Saves", kinds: ["save"] },
-  { label: "Corners", kinds: ["corner"] }, { label: "Free kicks", kinds: ["free_kick"] }, { label: "Cards", kinds: ["card"] },
+  { label: "Corners", kinds: ["corner"] }, { label: "Free kicks", kinds: ["free_kick"] }, { label: "Fouls", kinds: ["foul"] }, { label: "Cards", kinds: ["card"] },
 ];
 
 interface Props {
