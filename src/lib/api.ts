@@ -36,6 +36,11 @@ export async function cancelQueuedRun(runId: string): Promise<void> {
   unwrap(await supabase.from("stat_runs").delete().eq("id", runId).eq("status", "queued"));
 }
 
+/** Stop a run the worker has started: it checks this status every 20 s and ends the job. */
+export async function stopRun(runId: string): Promise<void> {
+  unwrap(await supabase.from("stat_runs").update({ status: "cancelled", finished_at: new Date().toISOString(), error: "stopped from the app" }).eq("id", runId).eq("status", "running"));
+}
+
 /** Replace a game's flow with one built by analyzer/flow.py (admin only; the worker writes it directly). */
 export async function saveFlow(gameId: string, data: FlowData): Promise<void> {
   if (!data || data.v !== 1 || !data.h || !data.seam || !Array.isArray(data.m)) throw new Error("That isn't a match flow file.");

@@ -70,9 +70,27 @@ def run_queue(poll_seconds: int, backend: str) -> int:
             if us in ("A", "B"):
                 args += ["--us-cluster", us]
             print(f"--- run for game {gid} at {time.strftime('%H:%M:%S')}")
-            rc = subprocess.call(args, cwd=os.path.dirname(os.path.abspath(__file__)))
-            print(f"--- finished with code {rc}")
-            if rc != 0:
+            # Run it as a child and keep an eye on the run's row: "Stop" in the app sets the status to
+            # cancelled, and the child is then ended (it cleans up after itself on SIGTERM).
+            child = subprocess.Popen(args, cwd=os.path.dirname(os.path.abspath(__file__)))
+            stopped = False
+            while child.poll() is None:
+                time.sleep(20)
+                try:
+                    st = db.client().table("stat_runs").select("status").eq("id", q[0]["id"]).limit(1).execute().data
+                    if not st or st[0]["status"] == "cancelled":
+                        print("run was stopped from the app; ending it"); stopped = True
+                        child.terminate()
+                        try:
+                            child.wait(timeout=60)
+                        except subprocess.TimeoutExpired:
+                            child.kill()
+                        break
+                except Exception as e:  # noqa: BLE001
+                    print("status check failed:", str(e)[:120])
+            rc = child.returncode
+            print(f"--- finished with code {rc}{' (stopped)' if stopped else ''}")
+            if rc != 0 and not stopped:
                 # Don't spin on a broken run: mark it failed so the queue moves on. The app shows the status.
                 # The run usually recorded its own traceback already; only fill in when it did not.
                 try:
@@ -101,6 +119,9 @@ def main() -> int:
     ap.add_argument("--refit-homography", action="store_true", help="With --from-cache: re-run the pitch model (re-decodes frames at 1 fps)")
     ap.add_argument("--camera", default="ballercam", help="Calibration name under calib/ used to de-warp a wide_fixed source")
     args = ap.parse_args()
+    # ended by the worker (Stop in the app): leave through the normal exits so temp files are removed
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     if args.watch:
         return run_queue(args.poll, args.backend)
     if not args.game_id:

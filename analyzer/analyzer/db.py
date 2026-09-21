@@ -49,7 +49,8 @@ def claim_run(game_id, video_id, model_version, params):
 
 
 def finish_run(run_id, status, error=None):
-    client().table("stat_runs").update({"status": status, "finished_at": now(), "error": error}).eq("id", run_id).execute()
+    # a run the admin stopped stays stopped, whatever the child was about to report
+    client().table("stat_runs").update({"status": status, "finished_at": now(), "error": error}).eq("id", run_id).neq("status", "cancelled").execute()
 
 
 def get_kit_color(game_id):

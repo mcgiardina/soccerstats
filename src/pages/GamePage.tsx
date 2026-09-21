@@ -393,9 +393,10 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                       {b.runs.map((r) => (
                         <div key={r.id} className="tag-row small">
                           <span className="mono">{r.id.slice(0, 8)}</span>
-                          <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
+                          <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status === "cancelled" ? "stopped" : r.status}</span>
                           <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.status === "running" && typeof r.params?.stage === "string" ? ` · ${r.params.stage}` : ""}{r.error ? ` · ${r.error}` : ""}</span>
-                          {r.status === "queued" ? <button className="btn sm" onClick={async () => { await api.cancelQueuedRun(r.id); reload(); }}>Cancel</button> : <span />}
+                          {r.status === "queued" ? <button className="btn sm" onClick={async () => { await api.cancelQueuedRun(r.id); reload(); }}>Cancel</button>
+                            : r.status === "running" ? <button className="btn sm danger" onClick={async () => { if (confirm("Stop this run? What it has worked out so far is thrown away.")) { await api.stopRun(r.id); showToast("Stopping: the worker ends it within half a minute"); reload(); } }}>Stop</button> : <span />}
                           <RunProgress run={r} />
                           <FixedRunSummary run={r} />
                         </div>

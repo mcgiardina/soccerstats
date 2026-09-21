@@ -91,7 +91,7 @@ export interface StatRun {
   video_id: string | null;
   model_version: string | null;
   params: Record<string, unknown> | null;
-  status: "queued" | "running" | "done" | "failed" | null;
+  status: "queued" | "running" | "done" | "failed" | "cancelled" | null;
   started_at: string | null;
   finished_at: string | null;
   error: string | null;
