@@ -5,12 +5,19 @@ import { fmtClock } from "../lib/time";
 import { useTheme } from "../lib/theme";
 
 export interface FlowGoal { t: number; team: "us" | "them" }
+/** Tagged events other than goals, for the running stats panel, the strip's ticks and shot spikes. */
+export interface FlowEvent { t: number; team: "us" | "them"; kind: "shot" | "shot_on_target" | "save" | "corner" | "free_kick" | "card" }
+const STAT_ROWS: { label: string; kinds: FlowEvent["kind"][] }[] = [
+  { label: "Shots", kinds: ["shot", "shot_on_target"] }, { label: "On target", kinds: ["shot_on_target"] }, { label: "Saves", kinds: ["save"] },
+  { label: "Corners", kinds: ["corner"] }, { label: "Free kicks", kinds: ["free_kick"] }, { label: "Cards", kinds: ["card"] },
+];
 
 interface Props {
   flow: FlowData;
   names: { us: string; them: string };
   colors: { us: string; them: string };
   goals?: FlowGoal[];
+  events?: FlowEvent[];
   onSeek?: (t: number) => void;
   /** remembers this viewer's colour choices for this game */
   storageKey?: string;
@@ -71,7 +78,7 @@ function ramp(c: [number, number, number], lightKit: boolean, lightStage: boolea
   return { fill, line };
 }
 
-export default function FlowField({ flow, names, colors: kitColors, goals = [], onSeek, storageKey }: Props) {
+export default function FlowField({ flow, names, colors: kitColors, goals = [], events = [], onSeek, storageKey }: Props) {
   const lightStage = useTheme().resolved === "light";
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -143,8 +150,9 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
       }
     };
     for (const at of flow.attacks) if (Math.abs(at.t - t) < 90) bump(at.team, SPIKE * Math.min(1, at.score / maxScore) * 0.8, t - at.t, 5, 14);
+    for (const e of events) if ((e.kind === "shot" || e.kind === "shot_on_target") && Math.abs(e.t - t) < 90) bump(e.team, SPIKE * (e.kind === "shot_on_target" ? 0.75 : 0.5), t - e.t, 4, 16);
     for (const g of goals) if (Math.abs(g.t - t) < 140) bump(g.team, SPIKE * 0.95, t - g.t, 4, 30);
-  }, [flow, H, S, goals, maxScore]);
+  }, [flow, H, S, goals, events, maxScore]);
 
   const draw = useCallback(() => {
     const cv = canvas.current; if (!cv) return;
@@ -263,9 +271,10 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
     const ink = lightStage ? "23,32,58" : "255,255,255";
     ctx.fillStyle = `rgba(${ink},.22)`; ctx.fillRect(0, mid - 0.5, w, 1);
     if (flow.halves.length > 1) { ctx.fillStyle = `rgba(${ink},.06)`; ctx.fillRect(X(flow.halves[0][1]), 0, X(flow.halves[1][0]) - X(flow.halves[0][1]), h); }
+    for (const e of events) { if (e.kind !== "shot" && e.kind !== "shot_on_target") continue; ctx.fillStyle = `rgba(${ink},${e.kind === "shot_on_target" ? 0.85 : 0.45})`; ctx.fillRect(X(e.t) - 0.75, e.team === "us" ? 0 : h - 7, 1.5, 7); }
     for (const g of goals) { ctx.beginPath(); ctx.arc(X(g.t), g.team === "us" ? 4 : h - 4, 3.2, 0, Math.PI * 2); ctx.fillStyle = lightStage ? "#c27a00" : "#ffd666"; ctx.fill(); }
     const x = X(tRef.current); ctx.fillStyle = `rgb(${ink})`; ctx.fillRect(x - 0.75, 0, 1.5, h); ctx.beginPath(); ctx.arc(x, mid, 3.5, 0, Math.PI * 2); ctx.fill();
-  }, [flow, goals, cUs, cThem, tStart, tStop, lightStage]);
+  }, [flow, goals, events, cUs, cThem, tStart, tStop, lightStage]);
 
   const sync = useCallback(() => {
     const t = tRef.current;
@@ -310,6 +319,7 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
     tRef.current = tStart + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (tStop - tStart); sync();
   };
 
+  const statRows = STAT_ROWS.filter((r) => events.some((e) => r.kinds.includes(e.kind)));
   const mm = matchMinute(readout.t);
   const i = Math.min(flow.n - 1, Math.max(0, Math.round((readout.t - flow.t0) / flow.step)));
   const m = flow.m[i] ?? 0;
@@ -344,6 +354,20 @@ export default function FlowField({ flow, names, colors: kitColors, goals = [], 
           <p><b>The bright seam is who's on top.</b> It sits midway between the two teams' blocks of players. The further it is pushed toward a goal, the more that team is pinned back.</p>
           <p><b>The surface rises where the players are.</b> Sharp spikes at a goal are attacks the camera saw reach it; the taller, the faster and more direct. Gold marks a goal.</p>
           <p className="dim">A machine estimate of territory from the wide camera, not of possession.</p>
+        </div>
+      ) : null}
+      {statRows.length ? (
+        <div className="flow-stats" aria-label="Match stats so far">
+          {statRows.map((r) => {
+            const us = events.filter((e) => e.team === "us" && r.kinds.includes(e.kind) && e.t <= readout.t).length;
+            const them = events.filter((e) => e.team === "them" && r.kinds.includes(e.kind) && e.t <= readout.t).length;
+            return (
+              <div className="row" key={r.label}>
+                <b>{us}</b><span>{r.label}</span><b>{them}</b>
+                <i><em style={{ width: `${us + them ? (us / (us + them)) * 100 : 50}%`, background: "var(--flow-us)" }} /><em style={{ flex: 1, background: "var(--flow-them)" }} /></i>
+              </div>
+            );
+          })}
         </div>
       ) : null}
       <div className="flow-bar">

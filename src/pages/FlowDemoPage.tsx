@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import FlowField from "../components/FlowField";
+import FlowField, { type FlowEvent } from "../components/FlowField";
 import VideoPlayer from "../components/VideoPlayer";
 import type { PlayerHandle } from "../components/YouTubePlayer";
 import { resolveSource } from "../lib/sources";
@@ -8,6 +8,12 @@ import type { FlowData, Video } from "../lib/types";
 // The first real wide-camera game, before it has a game page of its own. The film plays straight
 // from its BallerCam share link. Goal times are the true ones (video clock); the rest is the machine's.
 const GOALS = [{ t: 1740, team: "them" as const }, { t: 3654, team: "them" as const }, { t: 4596, team: "us" as const }, { t: 5398, team: "them" as const }];
+// tagged live at the game (types and times only)
+const EVENTS: FlowEvent[] = [
+  ...([[1462, "shot_on_target"], [1674, "shot_on_target"], [1843, "shot"], [2075, "shot"], [2372, "free_kick"], [2548, "shot_on_target"], [3611, "shot"], [4207, "shot"], [4229, "shot_on_target"], [4547, "free_kick"], [4588, "free_kick"], [4743, "card"]] as [number, FlowEvent["kind"]][]).map(([t, kind]) => ({ t, kind, team: "us" as const })),
+  { t: 1720, kind: "save", team: "us" },
+  ...GOALS.map((g) => ({ t: g.t, kind: "shot_on_target" as const, team: g.team })),
+];
 const LINK = "https://app.ballercam.com/streams/athletic-soccer-club-long-beach-bu13-vs-possible-fc-bu13-20260912031107-ogosfqtj";
 
 export default function FlowDemoPage() {
@@ -22,7 +28,7 @@ export default function FlowDemoPage() {
     <div className="page">
       <h1>Match flow</h1>
       <p className="small muted">ASC Long Beach BU13 1–3 Possible FC BU13 · 20 Sep 2026 · from the fixed wide camera. Machine estimate.</p>
-      {flow ? <FlowField flow={flow} names={{ us: "ASC LB", them: "Possible FC" }} colors={{ us: "#ffffff", them: "#111111" }} goals={GOALS} storageKey="demo" onSeek={video ? (t) => { player.current?.seek(t); document.getElementById("demo-film")?.scrollIntoView({ behavior: "smooth", block: "center" }); } : undefined} /> : <div className="card small muted">Loading…</div>}
+      {flow ? <FlowField flow={flow} names={{ us: "ASC LB", them: "Possible FC" }} colors={{ us: "#ffffff", them: "#111111" }} goals={GOALS} events={EVENTS} storageKey="demo" onSeek={video ? (t) => { player.current?.seek(t); document.getElementById("demo-film")?.scrollIntoView({ behavior: "smooth", block: "center" }); } : undefined} /> : <div className="card small muted">Loading…</div>}
       {video ? <div id="demo-film" style={{ marginTop: "1rem" }}><VideoPlayer ref={player} video={video} /></div> : null}
     </div>
   );

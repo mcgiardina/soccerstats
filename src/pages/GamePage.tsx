@@ -11,7 +11,7 @@ import PeriodEditor from "../components/PeriodEditor";
 import ChaptersExport from "../components/ChaptersExport";
 import StatsPanel from "../components/StatsPanel";
 import Momentum from "../components/Momentum";
-import FlowField from "../components/FlowField";
+import FlowField, { type FlowEvent } from "../components/FlowField";
 import type { FlowData } from "../lib/types";
 import ShapePlot from "../components/ShapePlot";
 import GameForm from "../components/GameForm";
@@ -158,6 +158,20 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const playing = watchable.find((v) => v.id === playId) ?? video;
   const pitch = { lengthM: b?.game.pitch_length_m ?? team.pitch.lengthM, widthM: b?.game.pitch_width_m ?? team.pitch.widthM };
   const visibleTags = useMemo(() => (b ? (admin ? b.tags : trustedTags(b.tags)) : []), [b, admin]);
+  // What people tagged (or confirmed), for the match flow's running stats. Parents see only trusted tags.
+  const flowEvents = useMemo<FlowEvent[]>(() => {
+    if (!b) return [];
+    const onTarget = new Map(b.shots.map((s) => [s.tag_id, s.on_target]));
+    const out: FlowEvent[] = [];
+    for (const t of trustedTags(b.tags)) {
+      if (t.team !== "us" && t.team !== "them") continue;
+      const kind: FlowEvent["kind"] | null = t.type === "shot" || t.type === "penalty" ? (onTarget.get(t.id) ? "shot_on_target" : "shot")
+        : t.type === "goal" ? "shot_on_target" : t.type === "save" ? "save" : t.type === "corner" ? "corner" : t.type === "free_kick" ? "free_kick"
+        : t.type === "note" && /\bcard\b/i.test(t.label ?? "") ? "card" : null;
+      if (kind) out.push({ t: t.t_seconds, team: t.team, kind });
+    }
+    return out;
+  }, [b]);
   const summary = useMemo(() => (b ? summarizeGame(b.game, video, b.tags, b.shots, b.teamStats, period) : null), [b, video, period]);
 
   // Persist duration the first time the player reports it.
@@ -436,7 +450,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
 
       {flow && show("momentum") ? (
         <div style={{ marginTop: "1rem" }}>
-          <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} storageKey={g.id} onSeek={(t) => { seek(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} storageKey={g.id} events={flowEvents} onSeek={(t) => { seek(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
             goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed || (admin && t.confirmed == null))).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
         </div>
       ) : null}
