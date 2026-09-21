@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Shot, Tag, Video } from "../lib/types";
 import { TAG_LABELS, SET_PIECE_TYPES } from "../lib/types";
 import { seekTime, toMatchTime } from "../lib/time";
+import { isGoalTag, leadKind } from "../lib/stats";
 import { shareUrl, copyText } from "../lib/links";
 import { useTeamNames } from "../lib/team";
 
@@ -37,14 +38,14 @@ export default function TagList(p: Props) {
   const f = FILTERS.find((x) => x.key === filter)!;
   const shotByTag = new Map(p.shots.map((s) => [s.tag_id, s]));
   const list = p.tags
-    .filter((t) => !f.types || f.types.includes(t.type))
+    .filter((t) => !f.types || f.types.includes(t.type) || (f.key === "goals" && isGoalTag(t)) || (f.key === "shots" && (t.outcome === "shot" || t.outcome === "goal")))
     .filter((t) => side === "all" || t.team === side)
     .sort((a, b) => a.t_seconds - b.t_seconds);
 
   const activeId = [...list].reverse().find((t) => t.t_seconds <= p.currentTime + 0.5)?.id ?? null;
 
   async function copyLink(t: Tag) {
-    const ok = await copyText(shareUrl(p.gameId, seekTime(t.t_seconds, t.type)));
+    const ok = await copyText(shareUrl(p.gameId, seekTime(t.t_seconds, leadKind(t))));
     p.onToast?.(ok ? "Link copied" : "Copy failed");
   }
 
@@ -68,12 +69,12 @@ export default function TagList(p: Props) {
         const unreviewed = machine && t.confirmed == null;
         return (
           <div key={t.id} className={`tag-row ${unreviewed ? "machine" : ""} ${activeId === t.id ? "active" : ""}`}>
-            <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds, t.type))} title="Jump">{mt.label}</span>
+            <span className="t" onClick={() => p.onSeek(seekTime(t.t_seconds, leadKind(t)))} title="Jump">{mt.label}</span>
             <span className="lbl">
               <span className={`badge ${t.team ?? ""}`}>{names.of(t.team)}</span>
               {t.type === "yellow_card" || t.type === "red_card" ? <i className={`tag-card ${t.type === "red_card" ? "red" : ""}`} aria-hidden="true" /> : null}
               <strong>{TAG_LABELS[t.type] ?? t.type}</strong>
-              {t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
+              {t.outcome === "goal" ? <strong className="goal-word"> · Goal</strong> : t.outcome ? <span className="muted"> · {t.outcome}</span> : null}
               {t.label && !t.label.startsWith("machine ") ? <span> · {t.label}</span> : t.label ? <span className="muted"> · {t.label.replace("machine ", "")}</span> : null}
               {shot?.xg != null ? <span className="muted small"> · xG {shot.xg.toFixed(2)}</span> : null}
               {machine ? <span className="badge machine" style={{ marginLeft: 6 }} title="Machine proposal">≈{t.confidence != null ? ` ${Math.round(t.confidence * 100)}%` : ""}{t.confirmed === true ? " ✓" : t.confirmed === false ? " ✗" : ""}</span> : null}

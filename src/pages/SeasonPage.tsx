@@ -7,7 +7,7 @@ import { fmtDate } from "../lib/time";
 import { thumbnailUrl } from "../lib/youtube";
 
 const ytOf = (videos: { youtube_id: string | null; kind: string | null }[]) => videos.find((x) => x.youtube_id && x.kind !== "wide_fixed")?.youtube_id ?? null;
-import { summarizeGame } from "../lib/stats";
+import { isGoalTag, summarizeGame } from "../lib/stats";
 import TrendCharts, { buildTrend } from "../components/TrendCharts";
 import DateRangePicker from "../components/DateRangePicker";
 import { useShow, useTeam } from "../lib/team";
@@ -89,7 +89,7 @@ export default function SeasonPage() {
           const v = mainVideo(g.videos);
           const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), [], []);
           const cls = s.us.goals > s.them.goals ? "win" : s.us.goals < s.them.goals ? "loss" : "draw";
-          const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && t.type === "goal");
+          const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && isGoalTag(t));
           return (
             <Link key={g.id} to={isAdmin ? `/games/${g.id}` : `/g/${g.id}`} className="game-card reveal">
               {ytOf(g.videos) ? <img className="thumb" src={thumbnailUrl(ytOf(g.videos)!, "hq")} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}

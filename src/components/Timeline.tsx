@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { Tag, Video } from "../lib/types";
 import { fmtClock, seekTime } from "../lib/time";
+import { isGoalTag, leadKind } from "../lib/stats";
 
 interface Props {
   video: Video;
@@ -48,10 +49,10 @@ export default function Timeline({ video, duration, current, tags, onSeek, activ
       {tags.map((t) => (
         <div
           key={t.id}
-          className={`marker ${t.team ?? "none"} ${t.type === "goal" ? "goal" : ""} ${t.type === "yellow_card" ? "card yellow" : t.type === "red_card" ? "card red" : ""} ${t.source === "machine" && !t.confirmed ? "machine" : ""}`}
+          className={`marker ${t.team ?? "none"} ${isGoalTag(t) ? "goal" : ""} ${t.type === "yellow_card" ? "card yellow" : t.type === "red_card" ? "card red" : ""} ${t.source === "machine" && !t.confirmed ? "machine" : ""}`}
           style={{ left: pct(t.t_seconds), outline: activeTagId === t.id ? "2px solid var(--ink)" : undefined }}
-          title={`${fmtClock(t.t_seconds)} ${t.type}${t.team ? " · " + t.team : ""}`}
-          onPointerDown={(e) => { e.stopPropagation(); onSeek(seekTime(t.t_seconds, t.type)); }}
+          title={`${fmtClock(t.t_seconds)} ${t.type}${t.type !== "goal" && isGoalTag(t) ? " (goal)" : ""}${t.team ? " · " + t.team : ""}`}
+          onPointerDown={(e) => { e.stopPropagation(); onSeek(seekTime(t.t_seconds, leadKind(t))); }}
         />
       ))}
       <div className="playhead" style={{ left: pct(current) }} />

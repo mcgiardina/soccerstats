@@ -24,7 +24,7 @@ import { kitVars } from "../lib/kit";
 import { useTheme } from "../lib/theme";
 import type { GameBundle, Period, Shot, Tag, TagType, Video } from "../lib/types";
 import { SET_PIECE_TYPES, TAG_LABELS, VIDEO_KINDS, mainVideo } from "../lib/types";
-import { summarizeGame, trustedTags } from "../lib/stats";
+import { isGoalTag, leadKind, summarizeGame, trustedTags } from "../lib/stats";
 import { fmtClock, fmtDate, seekTime, toMatchTime } from "../lib/time";
 import { copyText, shareUrl } from "../lib/links";
 import { openUrl, providerLabel, resolveSource } from "../lib/sources";
@@ -171,6 +171,8 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
         : t.type === "goal" ? "shot_on_target" : t.type === "save" ? "save" : t.type === "corner" ? "corner" : t.type === "free_kick" ? "free_kick"
         : t.type === "foul" ? "foul" : t.type === "yellow_card" || t.type === "red_card" || (t.type === "note" && /\bcard\b/i.test(t.label ?? "")) ? "card" : null;
       if (kind) out.push({ t: t.t_seconds, team: t.team, kind });
+      // a corner or free kick that ended in a shot or a goal is also a shot
+      if (kind && kind !== "shot" && kind !== "shot_on_target" && (t.outcome === "goal" || t.outcome === "shot")) out.push({ t: t.t_seconds, team: t.team, kind: t.outcome === "goal" || onTarget.get(t.id) ? "shot_on_target" : "shot" });
     }
     return out;
   }, [b]);
@@ -453,7 +455,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       {flow && show("momentum") ? (
         <div style={{ marginTop: "1rem" }}>
           <FlowField flow={flow} names={names} colors={{ us: g.kit_color || "", them: g.opp_kit_color || "" }} storageKey={g.id} events={flowEvents} onSeek={(t) => { seek(t); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-            goals={b.tags.filter((t) => t.type === "goal" && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed || (admin && t.confirmed == null))).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
+            goals={b.tags.filter((t) => isGoalTag(t) && (t.team === "us" || t.team === "them") && (t.source === "human" || t.confirmed || (admin && t.confirmed == null))).map((t) => ({ t: t.t_seconds, team: t.team as "us" | "them" }))} />
         </div>
       ) : null}
 
@@ -484,7 +486,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           </div>
           {mapMode === "shots" || !show("passes") ? (
             <>
-              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) { seek(seekTime(t.t_seconds, t.type)); if (admin) setPlacing(t); } }} />
+              <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) { seek(seekTime(t.t_seconds, leadKind(t))); if (admin) setPlacing(t); } }} />
               <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it{admin ? " and move it or change its details" : ""}. {names.us} attack →, {names.them} attack ←.</div>
             </>
           ) : (

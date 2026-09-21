@@ -14,6 +14,11 @@ export function isShotTag(t: Tag): boolean {
   return false;
 }
 
+/** The kind to hand to seekTime(): a free kick or corner that went in is a goal for run-up purposes. */
+export function leadKind(t: Pick<Tag, "type" | "outcome">): string {
+  return isGoalTag(t as Tag) ? "goal" : t.type;
+}
+
 export function isGoalTag(t: Tag): boolean {
   return t.type === "goal" || (SET_PIECE_TYPES.includes(t.type) && t.outcome === "goal");
 }

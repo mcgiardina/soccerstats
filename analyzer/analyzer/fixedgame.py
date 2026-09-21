@@ -228,8 +228,9 @@ def write(game_id, run_id, main_video, goals, flow_doc, halves):
     c = db.client()
     # only this pipeline's own unreviewed proposals are replaced; scoreboard goals and human tags stay
     c.table("tags").delete().eq("game_id", game_id).eq("source", "machine").is_("confirmed", "null").eq("label", GOAL_LABEL).execute()
-    existing = [t for t in c.table("tags").select("t_seconds,type,team,source,confirmed,label").eq("game_id", game_id).eq("type", "goal").execute().data
-                if t.get("confirmed") is not False]
+    # goals already on the game: goal tags, and set pieces (free kick, corner, penalty...) marked as having gone in
+    existing = [t for t in c.table("tags").select("t_seconds,type,team,source,confirmed,label,outcome").eq("game_id", game_id).execute().data
+                if (t["type"] == "goal" or t.get("outcome") == "goal") and t.get("confirmed") is not False and t.get("label") != GOAL_LABEL]
     # how the machine did against the goals already on the game (scoreboard or human)
     compare = []
     for t in existing:
