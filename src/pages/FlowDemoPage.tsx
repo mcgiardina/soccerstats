@@ -22,7 +22,7 @@ export default function FlowDemoPage() {
   const player = useRef<PlayerHandle>(null);
   useEffect(() => { fetch("/demo/flow.json").then((r) => r.json()).then(setFlow).catch(() => setFlow(null)); }, []);
   useEffect(() => {
-    resolveSource(LINK).then((r) => setVideo({ id: "demo", game_id: "demo", kind: "upload", duration_seconds: null, kickoff_offset_seconds: 0, halftime_offset_seconds: null, second_half_offset_seconds: null, fulltime_offset_seconds: null, created_at: "", ...r.video })).catch(() => setVideo(null));
+    resolveSource(LINK).then((r) => setVideo({ id: "demo", game_id: "demo", kind: "upload", duration_seconds: null, kickoff_offset_seconds: 0, halftime_offset_seconds: null, second_half_offset_seconds: null, fulltime_offset_seconds: null, us_attack_h1: null, created_at: "", ...r.video })).catch(() => setVideo(null));
   }, []);
   return (
     <div className="page">

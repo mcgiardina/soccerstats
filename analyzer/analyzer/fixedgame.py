@@ -247,6 +247,8 @@ def write(game_id, run_id, main_video, goals, flow_doc, halves):
     if flow_doc:
         c.table("game_flow").delete().eq("game_id", game_id).execute()
         c.table("game_flow").insert({"game_id": game_id, "run_id": run_id, "data": flow_doc}).execute()
+    if flow_doc and flow_doc.get("us_attack_h1") and not main_video.get("us_attack_h1"):
+        c.table("videos").update({"us_attack_h1": flow_doc["us_attack_h1"]}).eq("id", main_video["id"]).execute()
     if halves and main_video.get("halftime_offset_seconds") is None:
         patch = {"kickoff_offset_seconds": round(halves[0][0]), "halftime_offset_seconds": round(halves[0][1])}
         if len(halves) > 1:

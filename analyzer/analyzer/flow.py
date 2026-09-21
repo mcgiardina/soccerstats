@@ -138,6 +138,8 @@ def build(rows, cam, size, field, half_list, us_is_light=True, attacks=(), clock
     return {
         "v": 1, "step": step, "t0": round(float(steps[0] - clock_offset), 1), "n": int(len(steps)), "nx": NX, "ny": NY,
         "halves": [[round(h[0] - clock_offset, 1), round(h[1] - clock_offset, 1)] for h in half_list],
+        # we defend the side our shirts line up on at the first kick-off, so we attack the other way
+        "us_attack_h1": "right" if ((half_list[0][2] == "left") == us_is_light) else "left",
         "h": base64.b64encode(H8.tobytes()).decode(),
         "seam": base64.b64encode((seam * 255).astype(np.uint8).tobytes()).decode(),
         "m": [round(float(v), 3) for v in mom],

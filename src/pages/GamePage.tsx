@@ -256,7 +256,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       // pitch). Use them for the periods unless someone has already set half time by hand.
       const [h1, h2] = data.halves ?? [];
       if (video && h1 && video.halftime_offset_seconds == null) {
-        await api.updateVideo(video.id, { kickoff_offset_seconds: Math.round(h1[0]), halftime_offset_seconds: Math.round(h1[1]), second_half_offset_seconds: h2 ? Math.round(h2[0]) : null, fulltime_offset_seconds: h2 ? Math.round(h2[1]) : null });
+        await api.updateVideo(video.id, { ...(data.us_attack_h1 ? { us_attack_h1: data.us_attack_h1 } : {}), kickoff_offset_seconds: Math.round(h1[0]), halftime_offset_seconds: Math.round(h1[1]), second_half_offset_seconds: h2 ? Math.round(h2[0]) : null, fulltime_offset_seconds: h2 ? Math.round(h2[1]) : null });
         await reload(); showToast("Match flow attached · periods set from it");
       } else showToast("Match flow attached");
     }
@@ -499,7 +499,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
           {mapMode === "shots" || !show("passes") ? (
             <>
               <PitchMap names={names} shots={b.shots.filter((s) => { const t = b.tags.find((x) => x.id === s.tag_id); return t && (admin || t.source === "human" || t.confirmed); })} onShotClick={(s) => { const t = b.tags.find((x) => x.id === s.tag_id); if (t) { seek(seekTime(t.t_seconds, leadKind(t))); if (admin) setPlacing(t); } }} />
-              <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it{admin ? " and move it or change its details" : ""}. {names.us} attack →, {names.them} attack ←.</div>
+              <div className="tiny muted">Circle size = xG (pro-calibrated proxy). Gold ring = goal. Dashed = machine-located. Click a shot to watch it{admin ? " and move it or change its details" : ""}. Both halves are drawn the same way round: {names.us} always attack →, {names.them} always attack ←.</div>
             </>
           ) : (
             <>
@@ -517,7 +517,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
       </div>
 
       {editing ? <TagEditor tag={editing.tag} quick={editing.quick} opponent={g.opponent} onSave={saveTag} onClose={() => setEditing(null)} /> : null}
-      {placing ? <ShotPlacer tag={placing} existing={shotFor(placing)} pitch={pitch} opponent={g.opponent} onSave={(s) => saveShot(placing, s)} onClose={() => setPlacing(null)} /> : null}
+      {placing ? <ShotPlacer tag={placing} existing={shotFor(placing)} pitch={pitch} opponent={g.opponent} video={video} onSetDirection={video ? async (d) => { await api.updateVideo(video.id, { us_attack_h1: d }); reload(); } : undefined} onSave={(s) => saveShot(placing, s)} onClose={() => setPlacing(null)} /> : null}
       {editGame ? (
         <Modal onClose={() => setEditGame(false)} title="Edit game">
           <GameForm initial={g} opponents={[]} onSubmit={async (input) => { await api.updateGame(g.id, input); setEditGame(false); reload(); }} />

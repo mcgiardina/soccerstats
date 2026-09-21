@@ -12,6 +12,8 @@ interface Props {
   highlightId?: string | null;
   height?: number;
   attackLabel?: string;
+  /** draw (and pick) with the pitch turned round, to match the way the film shows this half */
+  flip?: boolean;
   names?: { us: string; them: string };
   /** when given, draw located passes instead of shots */
   passes?: PassEvent[];
@@ -23,7 +25,7 @@ export function toDisplay(team: Team | null, x: number, y: number): [number, num
   return team === "them" ? [(1 - x) * L, (1 - y) * W] : [x * L, y * W];
 }
 
-export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId, attackLabel, names, passes }: Props) {
+export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, highlightId, attackLabel, names, passes, flip }: Props) {
   const [hover, setHover] = useState<[number, number] | null>(null);
 
   function coords(e: React.MouseEvent<SVGSVGElement>): [number, number] {
@@ -38,6 +40,7 @@ export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, 
     if (!onPick) return;
     const [dx, dy] = coords(e);
     let x = dx / L, y = dy / W;
+    if (flip) { x = 1 - x; y = 1 - y; }
     if (pickTeam === "them") { x = 1 - x; y = 1 - y; }
     onPick(Math.min(1, Math.max(0, x)), Math.min(1, Math.max(0, y)));
   }
@@ -97,7 +100,8 @@ export default function PitchMap({ shots, onPick, pickTeam = "us", onShotClick, 
         </>
       ) : null}
       {passes ? null : shots.filter((s) => s.pitch_x != null && s.pitch_y != null).map((s) => {
-        const [cx, cy] = toDisplay(s.team, s.pitch_x!, s.pitch_y!);
+        let [cx, cy] = toDisplay(s.team, s.pitch_x!, s.pitch_y!);
+        if (flip) { cx = L - cx; cy = W - cy; }
         const r = 1.4 + (s.xg ?? 0.05) * 3.5;
         return (
           <g key={s.id}>

@@ -67,3 +67,12 @@ export function cap(s: string | null | undefined): string {
   const v = (s ?? "").replace(/_/g, " ").trim();
   return v ? v[0].toUpperCase() + v.slice(1) : "";
 }
+
+/** Which way a team is attacking ON THE FILM at time t, or null when the game does not say. */
+export function attackDirOnFilm(video: Video | null | undefined, team: "us" | "them", t: number): "left" | "right" | null {
+  const h1 = video?.us_attack_h1;
+  if (!h1) return null;
+  const secondHalf = video?.second_half_offset_seconds != null ? t >= video.second_half_offset_seconds : video?.halftime_offset_seconds != null && t >= video.halftime_offset_seconds;
+  const us = secondHalf ? (h1 === "left" ? "right" : "left") : h1;
+  return team === "us" ? us : us === "left" ? "right" : "left";
+}

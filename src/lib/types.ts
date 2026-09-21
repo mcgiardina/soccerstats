@@ -43,6 +43,8 @@ export interface Video {
   source_url: string | null;
   stream_url: string | null;   // HLS or mp4 the in-app player uses when there is no youtube_id
   raw_url: string | null;      // the camera's full-field file, for the analyzer only
+  /** which way we attack in the first half as seen on the film; the second half is the other way */
+  us_attack_h1: "left" | "right" | null;
   kind: "stream_archive" | "upload" | "wide_fixed" | null;
   title: string | null;
   duration_seconds: number | null;
@@ -140,6 +142,8 @@ export interface FlowData {
   nx: number;
   ny: number;
   halves: [number, number][];
+  /** which way we attacked in the first half as the camera saw it */
+  us_attack_h1?: "left" | "right";
   h: string;      // base64 uint8 [n][ny][nx]: where the players are
   seam: string;   // base64 uint8 [n][ny]: the front between the teams, 0..255 along the pitch
   m: number[];    // -1..1, + = us on top
