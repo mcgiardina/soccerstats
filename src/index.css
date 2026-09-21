@@ -409,7 +409,11 @@ textarea { min-height: 84px; resize: vertical; }
 .gauge .g-label { font-size: .72rem; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin-top: -.2rem; }
 .gauge .g-chip { margin-top: .3rem; }
 
-.stat-table { width: 100%; border-collapse: collapse; }
+/* Fixed, symmetric columns: with automatic sizing a long opponent name widened its own column and pushed
+   the labels (and both value columns) off centre. */
+.stat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.stat-table th:nth-child(1), .stat-table th:nth-child(3) { width: 30%; }
+.stat-table th { overflow-wrap: anywhere; vertical-align: bottom; }
 .stat-table td, .stat-table th { padding: .45rem .25rem; text-align: center; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--line); }
 .stat-table tr:last-child td { border-bottom: 0; }
 .stat-table th { font-size: .68rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--line-strong); }
