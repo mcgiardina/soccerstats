@@ -355,9 +355,9 @@ textarea { min-height: 84px; resize: vertical; }
 .timeline .marker:hover { transform: translateX(-50%) scale(1.25); }
 .timeline .marker.us { background: var(--us); } .timeline .marker.them { background: var(--them); } .timeline .marker.none { background: var(--faint); }
 .timeline .marker.goal { width: 17px; height: 17px; top: 7px; box-shadow: 0 0 0 3px #f5b83d, 0 0 10px rgba(245,184,61,.55), 0 1px 3px rgba(var(--shadow-rgb),.25); }
-/* a booking: the little card the referee holds up, above the event's dot */
-.timeline .marker.card::after { content: ""; position: absolute; left: 50%; bottom: calc(100% + 3px); width: 8px; height: 11px; border-radius: 2px; transform: translateX(-50%) rotate(8deg); background: #facc15; box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.35); }
-.timeline .marker.card.red::after { background: #dc2626; }
+/* a booking: the little card the referee holds up, above the event's dot. (Not named .card: that is the app's panel class, and it turned the dot into a big white disc.) */
+.timeline .marker.booking::after { content: ""; position: absolute; left: 50%; bottom: calc(100% + 3px); width: 8px; height: 11px; border-radius: 2px; transform: translateX(-50%) rotate(8deg); background: #facc15; box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.35); }
+.timeline .marker.booking.red::after { background: #dc2626; }
 .goal-word { color: var(--machine-ink, #8a5a00); }
 .tag-card { display: inline-block; width: 8px; height: 11px; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; transform: rotate(8deg); background: #facc15; box-shadow: 0 0 0 1px rgba(0,0,0,.35); } .tag-card.red { background: #dc2626; }
 .timeline .marker.machine { border-style: dashed; border-color: var(--machine); }
