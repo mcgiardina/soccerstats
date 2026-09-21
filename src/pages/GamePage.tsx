@@ -112,6 +112,22 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
   const [muted, setMuted] = useState(false);
   useEffect(() => { let on = true; if (ready && id) api.getFlow(id).then((f) => { if (on) setFlow(f); }); return () => { on = false; }; }, [ready, id, isAdmin]);
 
+  // While the worker has something to do, keep the run list (and its progress line) fresh; when a
+  // run finishes, load everything it wrote.
+  const busy = !!b?.runs.some((r) => r.status === "queued" || r.status === "running");
+  useEffect(() => {
+    if (!busy || !admin) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const runs = await api.listRuns(id);
+        const stillBusy = runs.some((r) => r.status === "queued" || r.status === "running");
+        setB((prev) => (prev ? { ...prev, runs } : prev));
+        if (!stillBusy) { reload(); api.getFlow(id).then(setFlow); }
+      } catch { /* offline for a moment: try again next tick */ }
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [busy, admin, id, reload]);
+
   const showToast = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(null), 1600); }, []);
   const video = b ? mainVideo(b.videos) : null;
   const watchable = b ? b.videos.filter((v) => v.kind !== "wide_fixed") : [];
@@ -355,6 +371,7 @@ export default function GamePage({ shareView = false }: { shareView?: boolean })
                           <span className="mono">{r.id.slice(0, 8)}</span>
                           <span className={`badge ${r.status === "failed" ? "them" : r.status === "done" ? "us" : ""}`}>{r.status}</span>
                           <span className="lbl muted">{r.model_version ?? ""}{r.finished_at ? ` · ${new Date(r.finished_at).toLocaleString()}` : r.started_at ? ` · started ${new Date(r.started_at).toLocaleTimeString()}` : ` · ${new Date(r.created_at).toLocaleString()}`}{r.status === "running" && typeof r.params?.stage === "string" ? ` · ${r.params.stage}` : ""}{r.error ? ` · ${r.error}` : ""}</span>
+                          {r.status === "queued" ? <button className="btn sm" onClick={async () => { await api.cancelQueuedRun(r.id); reload(); }}>Cancel</button> : <span />}
                           <FixedRunSummary run={r} />
                         </div>
                       ))}

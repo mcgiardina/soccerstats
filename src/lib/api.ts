@@ -27,6 +27,15 @@ export async function getFlow(gameId: string): Promise<FlowData | null> {
   return res.error || !res.data ? null : (res.data.data as FlowData);
 }
 
+export async function listRuns(gameId: string): Promise<StatRun[]> {
+  return unwrap(await supabase.from("stat_runs").select("*").eq("game_id", gameId).order("created_at", { ascending: false })) as StatRun[];
+}
+
+/** Take a run out of the queue before the worker has started it. */
+export async function cancelQueuedRun(runId: string): Promise<void> {
+  unwrap(await supabase.from("stat_runs").delete().eq("id", runId).eq("status", "queued"));
+}
+
 /** Replace a game's flow with one built by analyzer/flow.py (admin only; the worker writes it directly). */
 export async function saveFlow(gameId: string, data: FlowData): Promise<void> {
   if (!data || data.v !== 1 || !data.h || !data.seam || !Array.isArray(data.m)) throw new Error("That isn't a match flow file.");
