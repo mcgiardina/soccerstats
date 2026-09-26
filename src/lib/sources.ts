@@ -15,7 +15,7 @@ export const PROVIDERS: Record<Provider, { label: string }> = {
 /** What a pasted link turned out to be. Only the video fields go in the database; `game` is a
  *  one-time offer to prefill the game from what the camera's scoreboard knew. */
 export interface ResolvedSource {
-  video: Pick<Video, "provider" | "youtube_id" | "provider_ref" | "source_url" | "stream_url" | "raw_url" | "title"> & { kickoff_offset_seconds?: number };
+  video: Pick<Video, "provider" | "youtube_id" | "provider_ref" | "source_url" | "stream_url" | "raw_url" | "title" | "thumbnail_url"> & { kickoff_offset_seconds?: number };
   thumbnail: string | null;
   game?: {
     playedOn: string | null;
@@ -77,7 +77,7 @@ export async function fetchBallerCam(slug: string): Promise<BcStream> {
 export async function resolveSource(input: string): Promise<ResolvedSource> {
   const provider = detectProvider(input);
   if (!provider) throw new Error("Not a link I recognise. Paste a YouTube or BallerCam share link, or a direct .mp4 / .m3u8 address.");
-  const blank = { youtube_id: null, provider_ref: null, stream_url: null, raw_url: null, title: null };
+  const blank = { youtube_id: null, provider_ref: null, stream_url: null, raw_url: null, title: null, thumbnail_url: null };
   if (provider === "youtube") {
     const id = parseYouTubeId(input)!; const o = await fetchOEmbed(id);
     return { video: { ...blank, provider, youtube_id: id, source_url: watchUrl(id), title: o?.title ?? null }, thumbnail: thumbnailUrl(id, "hq"), note: o ? undefined : "YouTube didn't return details (private video?). You can still save it." };
@@ -88,10 +88,13 @@ export async function resolveSource(input: string): Promise<ResolvedSource> {
     const stream = s.h264VideoUrl || s.videoUrl;
     if (!stream) throw new Error("BallerCam hasn't finished processing that game yet.");
     const ms = (p: { corrected_milliseconds_from_start?: number | null; milliseconds_from_start?: number | null }) => (p.corrected_milliseconds_from_start ?? p.milliseconds_from_start ?? 0) / 1000;
+    // BallerCam publishes one picture per game, named after the stream
+    const name = stream.match(/b-cdn\.net\/(.+)_HD\/playlist\.m3u8/)?.[1];
+    const thumb = name ? `https://baller-assets.s3.amazonaws.com/uploads/streams/${name}.jpg` : null;
     const starts = (s.periods ?? []).map(ms).filter((t) => t > 0).sort((a, b) => a - b);
     return {
-      video: { ...blank, provider, provider_ref: s.slug, source_url: s.shareUrl || `https://app.ballercam.com/streams/${s.slug}`, stream_url: stream, raw_url: s.rawVideoUrl ?? null, title: s.title ?? null, kickoff_offset_seconds: starts.length ? Math.round(starts[0]) : undefined },
-      thumbnail: null,
+      video: { ...blank, provider, provider_ref: s.slug, source_url: s.shareUrl || `https://app.ballercam.com/streams/${s.slug}`, stream_url: stream, raw_url: s.rawVideoUrl ?? null, title: s.title ?? null, thumbnail_url: thumb, kickoff_offset_seconds: starts.length ? Math.round(starts[0]) : undefined },
+      thumbnail: thumb,
       game: {
         playedOn: s.startedAt ? new Date(s.startedAt).toLocaleDateString("en-CA") : null,
         teams: (s.teams ?? []).map((t) => ({ name: t.name, score: t.score ?? null, color: CSS_COLORS[(t.color?.css_name ?? "").toLowerCase().replace(/[\s_-]/g, "")] ?? null })),
@@ -101,6 +104,14 @@ export async function resolveSource(input: string): Promise<ResolvedSource> {
   }
   if (provider === "file") return { video: { ...blank, provider, source_url: u.href, stream_url: u.href, title: decodeURIComponent(u.pathname.split("/").pop() ?? "") || null }, thumbnail: null };
   throw new Error(`${PROVIDERS[provider].label} links aren't supported yet (no one has tested a real one). For now upload the download to YouTube, or paste a direct .mp4 / .m3u8 address if you have one.`);
+}
+
+/** The picture for a game's card: the watched film's own thumbnail, else YouTube's. */
+export function gameThumb(videos: Pick<Video, "kind" | "youtube_id" | "thumbnail_url">[]): string | null {
+  const watch = videos.filter((v) => v.kind !== "wide_fixed");
+  const own = watch.find((v) => v.thumbnail_url)?.thumbnail_url;
+  const yt = watch.find((v) => v.youtube_id)?.youtube_id;
+  return own ?? (yt ? thumbnailUrl(yt, "hq") : null);
 }
 
 export function openUrl(v: Video, t?: number): string | null {

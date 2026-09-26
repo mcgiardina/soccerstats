@@ -280,6 +280,14 @@ textarea { min-height: 84px; resize: vertical; }
   box-shadow: var(--shadow); transition: transform .2s, box-shadow .2s, border-color .2s;
 }
 .game-card:hover { text-decoration: none; transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--line-strong); }
+.game-card .thumb-box { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: var(--surface-2); }
+.game-card .thumb-box > .thumb { position: absolute; inset: 0; height: 100%; }
+.run-chip { position: absolute; left: .5rem; top: .5rem; padding: .2rem .55rem; border-radius: var(--pill); font-size: .68rem; font-weight: 700; letter-spacing: .02em; color: #fff; background: rgba(10,12,18,.72); backdrop-filter: blur(6px); }
+.run-chip::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: .35rem; background: #9ca3af; vertical-align: 1px; }
+.run-chip.done::before { background: #4fbf82; } .run-chip.failed::before { background: #ef6b5c; } .run-chip.queued::before { background: #e0b04a; }
+.run-chip.running::before { background: #60a5fa; animation: run-pulse 1.4s ease-in-out infinite; }
+@keyframes run-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .run-chip.running::before { animation: none; } }
 .game-card .thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--surface-2); }
 .game-card .thumb.empty { display: grid; place-items: center; color: var(--on-primary); font-size: 2rem; background: linear-gradient(135deg, var(--primary), #3a5688); }
 .game-card .body { padding: .85rem 1rem 1rem; }

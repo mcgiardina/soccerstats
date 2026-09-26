@@ -43,6 +43,8 @@ export interface Video {
   source_url: string | null;
   stream_url: string | null;   // HLS or mp4 the in-app player uses when there is no youtube_id
   raw_url: string | null;      // the camera's full-field file, for the analyzer only
+  /** picture for the game card when the film is not on YouTube */
+  thumbnail_url: string | null;
   /** which way we attack in the first half as seen on the film; the second half is the other way */
   us_attack_h1: "left" | "right" | null;
   kind: "stream_archive" | "upload" | "wide_fixed" | null;

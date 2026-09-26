@@ -4,13 +4,18 @@ import { Link } from "react-router-dom";
 import { loadSeason, type SeasonData } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { cap, fmtDate } from "../lib/time";
-import { thumbnailUrl } from "../lib/youtube";
-
-const ytOf = (videos: { youtube_id: string | null; kind: string | null }[]) => videos.find((x) => x.youtube_id && x.kind !== "wide_fixed")?.youtube_id ?? null;
+import { gameThumb } from "../lib/sources";
 import { isGoalTag, summarizeGame } from "../lib/stats";
 import TrendCharts, { buildTrend } from "../components/TrendCharts";
 import DateRangePicker from "../components/DateRangePicker";
 import { useShow, useTeam } from "../lib/team";
+
+/** Where the game's analysis stands, at a glance. */
+function RunChip({ run }: { run: { status: string | null; progress: number | null } }) {
+  const label = run.status === "queued" ? "Queued" : run.status === "running" ? `Analysing${run.progress != null ? ` ${Math.round(run.progress * 100)}%` : "…"}`
+    : run.status === "done" ? "Analysed" : run.status === "failed" ? "Analysis failed" : run.status === "cancelled" ? "Analysis stopped" : null;
+  return label ? <span className={`run-chip ${run.status}`}>{label}</span> : null;
+}
 
 export default function SeasonPage() {
   const { isAdmin } = useAuth();
@@ -25,6 +30,13 @@ export default function SeasonPage() {
   const [to, setTo] = useState("");
 
   useEffect(() => { loadSeason().then(setData).catch((e) => setErr(e.message)); }, [isAdmin]);
+  // while the worker is busy on any game, keep the cards' status chips current
+  const busy = !!data && Object.values(data.runs).some((r) => r.status === "queued" || r.status === "running");
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setInterval(() => { loadSeason().then(setData).catch(() => {}); }, 30000);
+    return () => clearInterval(timer);
+  }, [busy]);
 
   const opponents = useMemo(() => Array.from(new Set(data?.games.map((g) => g.opponent) ?? [])).sort(), [data]);
 
@@ -92,7 +104,11 @@ export default function SeasonPage() {
           const hasScore = g.score_us != null || data.tags.some((t) => t.game_id === g.id && isGoalTag(t));
           return (
             <Link key={g.id} to={isAdmin ? `/games/${g.id}` : `/g/${g.id}`} className="game-card reveal">
-              {ytOf(g.videos) ? <img className="thumb" src={thumbnailUrl(ytOf(g.videos)!, "hq")} alt="" loading="lazy" /> : <div className="thumb empty">⚽</div>}
+              <div className="thumb-box">
+                <div className="thumb empty">⚽</div>
+                {gameThumb(g.videos) ? <img className="thumb" src={gameThumb(g.videos)!} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : null}
+                {isAdmin && data.runs[g.id] ? <RunChip run={data.runs[g.id]} /> : null}
+              </div>
               <div className="body">
                 <div className="opp">{g.home_away === "away" ? "@ " : "vs "}{g.opponent}</div>
                 <div className="meta">

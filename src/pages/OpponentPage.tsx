@@ -5,7 +5,7 @@ import { loadSeason, type SeasonData } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { summarizeGame } from "../lib/stats";
 import { cap, fmtDate } from "../lib/time";
-import { thumbnailUrl } from "../lib/youtube";
+import { gameThumb } from "../lib/sources";
 import PitchMap from "../components/PitchMap";
 import { useShow } from "../lib/team";
 
@@ -40,7 +40,7 @@ export default function OpponentPage() {
         const s = summarizeGame(g, v ?? null, data.tags.filter((t) => t.game_id === g.id), data.shots.filter((x) => x.game_id === g.id), data.teamStats.filter((x) => x.game_id === g.id));
         return (
           <div key={g.id} className="card row opp-card" style={{ alignItems: "flex-start" }}>
-            {v?.youtube_id ? <img className="thumb-sm" src={thumbnailUrl(v.youtube_id, "hq")} alt="" /> : null}
+            {gameThumb(g.videos) ? <img className="thumb-sm" src={gameThumb(g.videos)!} alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : null}
             <div style={{ flex: 1, minWidth: 200 }}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <strong>{fmtDate(g.played_on)} · {cap(g.home_away)}{g.competition ? ` · ${cap(g.competition)}` : ""}</strong>

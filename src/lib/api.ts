@@ -155,16 +155,22 @@ export interface SeasonData {
   tags: Tag[];
   shots: Shot[];
   teamStats: TeamStats[];
+  /** latest analysis run per game id */
+  runs: Record<string, { status: StatRun["status"]; progress: number | null }>;
 }
 
 export async function loadSeason(): Promise<SeasonData> {
-  const [g, t, s, ts] = await Promise.all([
+  const [g, t, s, ts, r] = await Promise.all([
     listGames(),
     supabase.from("tags").select("*"),
     supabase.from("shots").select("*"),
     supabase.from("team_stats").select("*"),
+    supabase.from("stat_runs").select("id,game_id,status,created_at,progress:params->progress").order("created_at", { ascending: false }),
   ]);
-  return { games: g, tags: unwrap(t) as Tag[], shots: unwrap(s) as Shot[], teamStats: unwrap(ts) as TeamStats[] };
+  // the latest run of each game, for the status chip on its card (no run rows for the public: fine)
+  const latest: SeasonData["runs"] = {};
+  for (const x of (r.data ?? []) as { game_id: string; status: StatRun["status"]; progress: number | null }[]) if (!(x.game_id in latest)) latest[x.game_id] = { status: x.status, progress: typeof x.progress === "number" ? x.progress : null };
+  return { games: g, tags: unwrap(t) as Tag[], shots: unwrap(s) as Shot[], teamStats: unwrap(ts) as TeamStats[], runs: latest };
 }
 
 export async function listOpponents(): Promise<string[]> {
