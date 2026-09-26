@@ -16,14 +16,43 @@ people rows: [{"t": seconds, "p": [[x, y_feet, height, V, S, cls], ...]}, ...] s
 import numpy as np
 
 
-def classify(p, white_v=145, white_s=95, dark_v=120):
+# Shirt shades. The defaults were set on the first real game (white v black, overcast, turf); a
+# calibration can override them ("shades"), because sun and kit change where the two groups fall.
+SHADES = {"white_v": 145, "white_s": 95, "dark_v": 120}
+
+
+def classify(p, white_v=None, white_s=None, dark_v=None):
     """'light' / 'dark' / None from the torso's median HSV value and saturation. Two kits that
     are not light-vs-dark need a per-game colour split instead (not needed yet)."""
+    white_v = SHADES["white_v"] if white_v is None else white_v
+    white_s = SHADES["white_s"] if white_s is None else white_s
+    dark_v = SHADES["dark_v"] if dark_v is None else dark_v
     if p[3] >= white_v and p[4] < white_s:
         return "light"
     if p[3] < dark_v:
         return "dark"
     return None
+
+
+# The halfway rules work in whatever coordinates the rows are in. Pixels only make sense when the camera
+# stands on the halfway line (it is then a vertical line in the picture); with the camera anywhere else
+# the line is a diagonal, so convert the rows with field_rows() and use FIELD_SPLIT (feet, halfway at 0).
+FIELD_SPLIT = {"tol": 25.0, "step": 4.0}
+
+
+def field_rows(rows, to_field, field, margin=3.0):
+    """The same rows with x, y_feet replaced by field feet (X along, 0 at halfway; Y across), and
+    everybody off the pitch (benches, spectators, the far path) dropped."""
+    x0, x1, y0, y1 = field
+    out = []
+    for r in rows:
+        if not r["p"]:
+            out.append({"t": r["t"], "p": []}); continue
+        g = to_field([[p[0], p[1]] for p in r["p"]])
+        keep = [[float(gx), float(gy), *p[2:]] for (gx, gy), p in zip(g, r["p"])
+                if np.isfinite(gx) and np.isfinite(gy) and x0 - margin < gx < x1 + margin and y0 - margin < gy < y1 + margin]
+        out.append({"t": r["t"], "p": keep})
+    return out
 
 
 def split_purity(people, x_mid, y_range, tol=300, step=50, min_each=3, min_total=8):
@@ -45,9 +74,9 @@ def split_purity(people, x_mid, y_range, tol=300, step=50, min_each=3, min_total
     return best, side
 
 
-def restarts(rows, x_mid, y_range, window_s=10.0, min_purity=0.9, min_samples=3, min_gap_s=75.0):
+def restarts(rows, x_mid, y_range, window_s=10.0, min_purity=0.9, min_samples=3, min_gap_s=75.0, **split):
     ts = np.array([r["t"] for r in rows])
-    F = [split_purity(r["p"], x_mid, y_range) for r in rows]
+    F = [split_purity(r["p"], x_mid, y_range, **split) for r in rows]
     pu = np.array([f[0] for f in F]); sd = np.array([f[1] for f in F])
     out, last = [], -1e9
     for i in range(len(ts)):
@@ -58,7 +87,7 @@ def restarts(rows, x_mid, y_range, window_s=10.0, min_purity=0.9, min_samples=3,
     return out
 
 
-def kick_time(rows, restart, x_mid, y_range, hold=0.8, max_wait_s=150.0, with_break=False):
+def kick_time(rows, restart, x_mid, y_range, hold=0.8, max_wait_s=150.0, with_break=False, **split):
     """When the kick-off was actually TAKEN. restart["t"] is when the teams had lined up in their own
     halves, which for the start of a half is 30-60 s before the whistle; the kick is the moment the
     line-up breaks: the last sample with purity >= 0.8 before two in a row fall below it.
@@ -70,7 +99,7 @@ def kick_time(rows, restart, x_mid, y_range, hold=0.8, max_wait_s=150.0, with_br
     for r in rows:
         if r["t"] < restart["t"] or r["t"] > restart["t"] + max_wait_s:
             continue
-        pu, _ = split_purity(r["p"], x_mid, y_range)
+        pu, _ = split_purity(r["p"], x_mid, y_range, **split)
         if not np.isfinite(pu):
             continue
         if pu >= hold:
@@ -83,12 +112,12 @@ def kick_time(rows, restart, x_mid, y_range, hold=0.8, max_wait_s=150.0, with_br
     return (float(last), broke) if with_break else float(last)
 
 
-def nominate(rows, x_mid, y_range, window_s=8.0, min_purity=0.8, min_samples=2, min_gap_s=40.0):
+def nominate(rows, x_mid, y_range, window_s=8.0, min_purity=0.8, min_samples=2, min_gap_s=40.0, **split):
     """Loose first stage for restarts taken quickly: times worth re-sampling densely (2 fps, with a
     zoomed pass on the far side) and judging with own_half_restarts. Covers every true restart of
     the first real game, plus ~4x as many false windows, which is why it is not a detector."""
     ts = np.array([r["t"] for r in rows])
-    F = [split_purity(r["p"], x_mid, y_range, min_each=2, min_total=6) for r in rows]
+    F = [split_purity(r["p"], x_mid, y_range, **{"min_each": 2, "min_total": 6, **split}) for r in rows]
     pu = np.array([f[0] for f in F])
     out, last = [], -1e9
     for i in range(len(ts)):

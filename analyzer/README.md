@@ -225,3 +225,20 @@ flights with both ends read. Written to `team_stats` (possession_pct, turnovers,
 NOT validated yet: there is no answer key for possession. Every run stores 16 of its own calls in
 `params.fixed.spot_check`; the Analysis tab lists them to be marked right or wrong against the film, and that tally is
 the accuracy figure. Known risk: a bias toward the lighter kit.
+
+## Second real game (2026-09-26, away, grass, camera 15 ft up and off-centre): what had to change
+
+- **Player detector.** The football-specific model found 7 of 22 players from the higher, steeper camera in hard
+  sun; the general COCO person detector (`yolo11s`, 4 x 2 tiles of the pitch band) found all of them. The fixed-view
+  pipeline now uses the general one (`fixedgame.people_model`); spectators are removed by the pitch bounds.
+- **Halfway rules in field feet.** With the tripod ~11 ft left of halfway the halfway line is a diagonal in the
+  picture, so "everyone left / right of column x" is meaningless. `kickoffs.field_rows` converts the rows and the
+  rules run on X in feet (`FIELD_SPLIT`). A calibration that still names `x_mid` (the first game) keeps the pixel rule
+  it was validated with.
+- **Calibration without yard lines.** Both goals (assumed 24 x 8 ft), the halfway line and two lines parallel to the
+  touchline were enough: posts within 19 px, lines within 1-3 ft, and the same lens constants as the first game
+  (f 1427 v 1467). Landmarks are kept in the calibration file.
+- **Shades per calibration** (`"shades"`): white v dark blue in sun sits elsewhere than white v black under cloud.
+- **The failed possession run.** It died on its last database write (`pass_events.third` takes left/mid/right, and
+  `outcome` takes completed/incomplete/unknown) after 3 h 14 min. Rows now use those values, the run's results are
+  saved to the cache folder before any write, and a refused optional write is reported on the run instead of failing it.

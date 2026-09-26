@@ -22,7 +22,7 @@ from . import fieldmap, kickoffs
 NX, NY = 20, 10
 
 
-def halves(rows, restart_list, x_mid=None, y_range=None, min_share=0.35, smooth_s=60.0, min_break_s=180.0, min_half_s=1200.0, walk_off_s=12.0):
+def halves(rows, restart_list, x_mid=None, y_range=None, min_share=0.35, smooth_s=60.0, min_break_s=180.0, min_half_s=1200.0, walk_off_s=12.0, **split):
     """[(kick_off, end, light_side), ...] in the rows' clock.
 
     Half time is read the way a person would: the stretch where the players are off the pitch for
@@ -59,7 +59,7 @@ def halves(rows, restart_list, x_mid=None, y_range=None, min_share=0.35, smooth_
         # ~50:20 on the film), so lean a little early
         return float(ts[min(len(ts) - 1, lo + busy[-1] + 1)] - walk_off_s) if len(busy) else float(t_empty)
 
-    kick = (lambda r: kickoffs.kick_time(rows, r, x_mid, y_range)) if x_mid is not None else (lambda r: r["t"])
+    kick = (lambda r: kickoffs.kick_time(rows, r, x_mid, y_range, **split)) if x_mid is not None else (lambda r: r["t"])
     if not breaks:
         return [(kick(first), float(ts[-1]), first["light_side"])]
     ht0, ht1 = breaks[0]

@@ -28,7 +28,8 @@ export interface ResolvedSource {
 const CSS_COLORS: Record<string, string> = {
   white: "#ffffff", black: "#111111", red: "#d62828", blue: "#1d4ed8", navy: "#1a2d50", green: "#15803d", yellow: "#facc15",
   orange: "#f97316", purple: "#7e22ce", pink: "#ec4899", gray: "#6b7280", grey: "#6b7280", maroon: "#7f1d1d", gold: "#d4a017",
-  teal: "#0f766e", lightblue: "#60a5fa", skyblue: "#38bdf8",
+  teal: "#0f766e", lightblue: "#60a5fa", skyblue: "#38bdf8", darkblue: "#1e3a8a", royalblue: "#1d4ed8", darkgreen: "#14532d",
+  lightgreen: "#4ade80", darkred: "#7f1d1d", silver: "#9ca3af", brown: "#78350f", lime: "#84cc16", cyan: "#06b6d4", magenta: "#c026d3",
 };
 const DIRECT = /\.(mp4|m4v|webm|mov|m3u8)$/i;
 

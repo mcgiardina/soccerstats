@@ -1,0 +1,186 @@
+{
+ "size": [
+  3840,
+  2160
+ ],
+ "cam": {
+  "f": 1427.0674033600387,
+  "k": -0.06845551398369422,
+  "tilt": 0.4095868643494558,
+  "yaw": 0.04041888794224976,
+  "roll": -0.014820806983187749,
+  "cx": -11.381853676440441,
+  "d": 31.54128824953148,
+  "h": 15.20656234796278
+ },
+ "field": [
+  -136.4,
+  136.4,
+  -18.7,
+  149.6
+ ],
+ "goals": {
+  "left": [
+   566,
+   772,
+   712,
+   909
+  ],
+  "right": [
+   3128,
+   728,
+   3262,
+   853
+  ]
+ },
+ "band": [
+  560,
+  1800
+ ],
+ "far_band": [
+  580,
+  900
+ ],
+ "play_band": [
+  600,
+  1780
+ ],
+ "landmarks": {
+  "goal_ft": [
+   24,
+   8
+  ],
+  "left_goal": {
+   "near_base": [
+    575,
+    909
+   ],
+   "far_base": [
+    712,
+    831
+   ],
+   "near_top": [
+    566,
+    841
+   ],
+   "far_top": [
+    703,
+    772
+   ]
+  },
+  "right_goal": {
+   "far_base": [
+    3128,
+    784
+   ],
+   "far_top": [
+    3131,
+    728
+   ],
+   "near_base": [
+    3259,
+    853
+   ],
+   "near_top": [
+    3262,
+    803
+   ]
+  },
+  "halfway_line": [
+   [
+    1916,
+    610
+   ],
+   [
+    2000,
+    740
+   ],
+   [
+    2200,
+    960
+   ],
+   [
+    2330,
+    1130
+   ],
+   [
+    2460,
+    1300
+   ],
+   [
+    2600,
+    1520
+   ],
+   [
+    2660,
+    1620
+   ]
+  ],
+  "white_line_parallel_to_touchline_Y0": [
+   [
+    300,
+    1150
+   ],
+   [
+    800,
+    1160
+   ],
+   [
+    1400,
+    1166
+   ],
+   [
+    2400,
+    1130
+   ],
+   [
+    2800,
+    1104
+   ],
+   [
+    3200,
+    1070
+   ],
+   [
+    3500,
+    1040
+   ]
+  ],
+  "red_near_touchline": [
+   [
+    400,
+    1410
+   ],
+   [
+    800,
+    1600
+   ],
+   [
+    1200,
+    1706
+   ],
+   [
+    1600,
+    1760
+   ],
+   [
+    2000,
+    1736
+   ],
+   [
+    2400,
+    1680
+   ],
+   [
+    2680,
+    1624
+   ]
+  ]
+ },
+ "note": "SoCal Blaze (El Segundo) v ASC LB BU13, 2026-09-26, grass field with two sets of markings. BallerCam panoramic 3840x2160; tripod ~11 ft left of halfway, 15.2 ft up, tilt 23.5 deg. Camera fitted from both goals (assumed 24 x 8 ft), the halfway line and two lines parallel to the touchline: goal posts within 19 px, lines within 1-3 ft. Pitch taken as goal line to goal line (273 ft) by the red near touchline to its mirror about the goals (168 ft); the far touchline was not picked. No x_mid: the halfway line is a diagonal in this picture, so the kick-off rules run in field feet. Shades set from a contact sheet of this game's players: white shirts V 125-220 with S < 75, dark blue V 30-85; the referee wears green.",
+ "shades": {
+  "white_v": 125,
+  "white_s": 75,
+  "dark_v": 92
+ }
+}

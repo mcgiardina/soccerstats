@@ -27,7 +27,7 @@ import numpy as np
 from . import ballplay, clocks, db, fetch, fieldmap, fixedcam, flow, kickoffs
 
 CALIB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "calib", "fixed")
-OWNER_SHADE = lambda p: kickoffs.classify(p, dark_v=138)   # the valley between the two kits' brightness
+OWNER_SHADE = lambda p: kickoffs.classify(p, dark_v=kickoffs.SHADES["dark_v"] + 18)   # toward the valley between the two kits
 GOAL_LABEL = "machine goal (from the kick-off that followed; wide camera)"
 
 
@@ -69,42 +69,48 @@ def fetch_raw(url, key):
     raise RuntimeError("could not download the camera's full-field file; the share link may have been turned off")
 
 
-def _tiles(width, n=3, overlap=180):
-    w = int(np.ceil((width + (n - 1) * overlap) / n))
-    return [(max(0, i * (w - overlap)), min(width, i * (w - overlap) + w)) for i in range(n)]
+def _tiles(width, height, y0, nx=4, ny=2, overlap=120):
+    """(x, y, w, h) tiles covering the pitch band, overlapping so nobody is cut in two unseen."""
+    tw = int(np.ceil((width + (nx - 1) * overlap) / nx)); th = int(np.ceil((height + (ny - 1) * overlap) / ny))
+    return [(min(max(0, i * (tw - overlap)), width - tw), y0 + min(max(0, j * (th - overlap)), height - th), tw, th)
+            for j in range(ny) for i in range(nx)]
 
 
-def people_in(img, model, device, band, zoom_band=None, conf=0.3):
-    """[[x, y_feet, height, V, S, cls], ...] in source pixels. The pitch band is cut into three
-    overlapping tiles so far-side players keep enough pixels; zoom_band adds a 2x pass over the far
-    side (used for the dense windows, where every player matters)."""
-    from . import detect
+def people_model():
+    """The general person detector (COCO). The football-specific model was trained on broadcast-style
+    pictures and goes blind from a high, steep camera in hard sun: 7 of 22 players found on the second
+    real game, where this one finds all of them (and the spectators, which the pitch bounds remove)."""
+    from ultralytics import YOLO
+    return YOLO("yolo11s.pt"), "mps"
+
+
+def people_in(img, model, device, band, zoom_band=None, conf=0.2):
+    """[[x, y_feet, height, V, S, cls], ...] in source pixels, from overlapping tiles of the pitch band.
+    zoom_band adds a 2x pass over the far side (dense windows and flight ends, where every player matters).
+    V and S are the medians of the torso, which is what tells the two kits apart."""
     y0, y1 = band
-    tiles = _tiles(img.shape[1])
-    crops = [img[y0:y1, a:b] for a, b in tiles]; offs = [(a, y0, 1.0) for a, _ in tiles]
+    tiles = _tiles(img.shape[1], y1 - y0, y0)
+    crops = [img[y:y + h, x:x + w] for x, y, w, h in tiles]; offs = [(x, y, 1.0) for x, y, _w, _h in tiles]
     if zoom_band:
-        for a, _ in _tiles(img.shape[1], n=3, overlap=0):
-            a = min(a + 300, img.shape[1] - 1200)
-            crops.append(cv2.resize(img[zoom_band[0]:zoom_band[1], a:a + 1200], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)); offs.append((a, zoom_band[0], 0.5))
+        for x, y, w, h in _tiles(img.shape[1], zoom_band[1] - zoom_band[0], zoom_band[0], nx=4, ny=1, overlap=80):
+            crops.append(cv2.resize(img[y:y + h, x:x + w], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)); offs.append((x, y, 0.5))
     out = []
-    for (ox, oy, sc), crop, r in zip(offs, crops, model.predict(crops, device=device, verbose=False, conf=conf, imgsz=1280)):
+    for (ox, oy, sc), crop, r in zip(offs, crops, model.predict(crops, device=device, verbose=False, conf=conf, imgsz=1280, classes=[0])):
         if r.boxes is None:
             continue
-        for bx, c in zip(r.boxes.xyxy.tolist(), r.boxes.cls.tolist()):
-            if int(c) not in (detect.RF_PLAYER, detect.RF_GK):
-                continue
+        for bx in r.boxes.xyxy.tolist():
             x1, y1b, x2, y2 = bx; h = y2 - y1b
-            if h * sc < 16:
+            if h * sc < 14:
                 continue
             torso = crop[int(y1b + 0.2 * h):int(y1b + 0.5 * h), int(x1 + 0.25 * (x2 - x1)):int(x2 - 0.25 * (x2 - x1))]
             if torso.size == 0:
                 continue
             hsv = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV).reshape(-1, 3)
             out.append([round(float(ox + (x1 + x2) / 2 * sc), 1), round(float(oy + y2 * sc), 1), round(float(h * sc), 1),
-                        int(np.median(hsv[:, 2])), int(np.median(hsv[:, 1])), int(c)])
+                        int(np.median(hsv[:, 2])), int(np.median(hsv[:, 1])), 0])
     out.sort(); dd = []
-    for p in out:   # the tile overlap sees some players twice
-        if not dd or abs(p[0] - dd[-1][0]) > 14 or abs(p[1] - dd[-1][1]) > 14:
+    for p in out:   # overlapping tiles see some players twice
+        if not any(abs(p[0] - q[0]) < 14 and abs(p[1] - q[1]) < 14 for q in dd[-6:]):
             dd.append(p)
     return dd
 
@@ -116,18 +122,24 @@ P_FETCH, P_PASS1, P_WINDOWS, P_DONE = 0.04, 0.55, 0.85, 0.98
 
 def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, limit_seconds=None):
     import contextlib, io
-    from . import detect
     with contextlib.redirect_stdout(io.StringIO()):
-        model, _ball, device, football = detect._model("local")
-    if not football:
-        raise RuntimeError("the football player weights are missing (run get_weights.sh)")
+        model, device = people_model()
     cap = cv2.VideoCapture(raw_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     size = (int(cap.get(3)), int(cap.get(4)))
     if list(size) != list(calib["size"]):
         raise RuntimeError(f"the recording is {size[0]}x{size[1]} but the calibration was made for {calib['size'][0]}x{calib['size'][1]}")
     total_s = (cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0) / fps
-    band, x_mid, y_range = calib["band"], calib["x_mid"], calib["y_range"]
+    band = calib["band"]
+    kickoffs.SHADES.update(calib.get("shades") or {})
+    to_field = lambda px: fieldmap.to_field(px, calib["cam"], size)
+    # Halfway rules: in picture coordinates for a calibration that names the halfway column (camera on
+    # the halfway line; the first real game, validated that way), otherwise in field feet.
+    if calib.get("x_mid") is not None:
+        x_mid, y_range, split, halfway_rows = calib["x_mid"], calib["y_range"], {}, (lambda rr: rr)
+    else:
+        x_mid, y_range, split = 0.0, (calib["field"][2] - 4, calib["field"][3] + 4), kickoffs.FIELD_SPLIT
+        halfway_rows = lambda rr: kickoffs.field_rows(rr, to_field, calib["field"])
     watchers = [fixedcam.GoalWatcher(n, g, size) for n, g in calib["goals"].items()]
     # the ball in open play, as flights (ballplay.py): possession, turnovers, passes
     ball = ballplay.FieldTracker(calib["cam"], size, calib.get("play_band") or band, field=calib["field"])
@@ -160,9 +172,10 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
     ball.finish(); flights += ball.pop_flights(); flights.sort(key=lambda f: f["t0"])
 
     # restarts: coarse rule, then the dense second stage on the nominated windows
-    v1 = kickoffs.restarts(rows, x_mid, y_range)
+    hrows = halfway_rows(rows)
+    v1 = kickoffs.restarts(hrows, x_mid, y_range, **split)
     windows = []
-    nominated = kickoffs.nominate(rows, x_mid, y_range)
+    nominated = kickoffs.nominate(hrows, x_mid, y_range, **split)
     for k, c in enumerate(nominated):
         cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, c - 22) * 1000); seq, j = [], 0
         while True:
@@ -174,12 +187,11 @@ def analyse(raw_path, calib, light_is_us, progress=lambda msg, frac=None: None, 
                 seq.append({"t": round(float(t), 2), "p": people_in(img, model, device, band, zoom_band=calib.get("far_band"))})
         windows.append(seq)
         progress(f"pass 2 of 3: window {k + 1} of {len(nominated)}", P_PASS1 + (P_WINDOWS - P_PASS1) * (k + 1) / len(nominated))
-    to_field = lambda px: fieldmap.to_field(px, calib["cam"], size)
     v2 = kickoffs.own_half_restarts(windows, to_field, calib["field"])
     merged = kickoffs.merge(v1, v2)
     # a kick-off line-up BREAKS into play; teams warming up in their own halves just stay apart
-    real = [r for r in merged if kickoffs.kick_time(rows, r, x_mid, y_range, with_break=True)[1]]
-    half_list = flow.halves(rows, real, x_mid, y_range)
+    real = [r for r in merged if kickoffs.kick_time(hrows, r, x_mid, y_range, with_break=True, **split)[1]]
+    half_list = flow.halves(hrows, real, x_mid, y_range, **split)
     in_play = [r for r in real if any(h[0] - 90 <= r["t"] <= h[1] for h in half_list)]
     goals = [g for g in kickoffs.goals(in_play, activity, us_is_light=light_is_us) if g["kind"] == "goal"]
 
@@ -230,6 +242,9 @@ def main(game, main_video, wide, run, args):
                    "halves": [[to_film(h[0]), to_film(h[1])] for h in res["halves"]], "goals": goals}
         play = play_stats(res["flights"], res["halves"], calib["field"], light_is_us, to_film)
         summary["ball"] = play["summary"]; summary["spot_check"] = play["spot_check"]
+        # Hours of work: keep it on disk before touching the database (a rejected row once lost a whole run).
+        keep = os.path.join(fetch.CACHE, f"fixed_{game['id']}.json")
+        json.dump({"summary": summary, "goals": goals, "flow": flow_doc, "play": play, "halves": summary["halves"]}, open(keep, "w"))
         if args.dry_run:
             print(json.dumps(summary, indent=1)); return 0
         summary["compare"] = write(game["id"], run["id"], main_video, goals, flow_doc, summary["halves"], play)
@@ -270,6 +285,8 @@ def play_stats(flights, half_list, field, light_is_us, to_film):
                          "ball_coverage": round(known / max(1.0, sum(lengths[name])), 3)})
         summary[name] = {"possession_us": next((r["possession_pct"] for r in rows if r["period"] == name and r["team"] == "us"), None),
                          "read_share": round(known / max(1.0, sum(lengths[name])), 2)}
+    # thirds are of the pitch as the camera sees it (left / mid / right), which is what the table stores
+    third = lambda X: "left" if X < x0 + (x1 - x0) / 3 else "mid" if X < x0 + 2 * (x1 - x0) / 3 else "right"
     passes = []
     for f in flights:
         hf = next((h for h in half_list if h[0] <= f["t0"] <= h[1]), None)
@@ -281,8 +298,8 @@ def play_stats(flights, half_list, field, light_is_us, to_film):
             u, v = float(np.clip(u, 0, 1)), float(np.clip(v, 0, 1))
             return (round(u, 3), round(1 - v, 3)) if attacks_right else (round(1 - u, 3), round(v, 3))
         (fx, fy), (tx, ty) = norm(f["xy0"]), norm(f["xy1"])
-        passes.append({"t": to_film(f["t0"]), "team": side(f["a"]), "completed": f["a"] == f["b"], "outcome": "completed" if f["a"] == f["b"] else "intercepted",
-                       "from_x": fx, "from_y": fy, "to_x": tx, "to_y": ty, "third": "def" if fx < 1 / 3 else "mid" if fx < 2 / 3 else "att", "confidence": 0.6})
+        passes.append({"t": to_film(f["t0"]), "team": side(f["a"]), "completed": f["a"] == f["b"], "outcome": "completed" if f["a"] == f["b"] else "incomplete",
+                       "from_x": fx, "from_y": fy, "to_x": tx, "to_y": ty, "third": third(f["xy0"][0]), "confidence": 0.6})
     both = [f for f in flights if f.get("a") and f.get("b") and any(h[0] <= f["t0"] <= h[1] for h in half_list)]
     pick = [both[int(k * len(both) / 16)] for k in range(16)] if len(both) >= 16 else both
     spot = [{"t": to_film(f["t0"]), "from": side(f["a"]), "to": side(f["b"])} for f in pick]
@@ -319,13 +336,21 @@ def write(game_id, run_id, main_video, goals, flow_doc, halves, play=None):
         if len(halves) > 1:
             patch.update({"second_half_offset_seconds": round(halves[1][0]), "fulltime_offset_seconds": round(halves[1][1])})
         c.table("videos").update(patch).eq("id", main_video["id"]).execute()
+    problems = []
     if play:
-        # machine possession / turnovers / passes replace the last machine figures; human-adjusted rows stay
-        c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
-        if play["team_stats"]:
-            c.table("team_stats").insert([{**r, "game_id": game_id, "run_id": run_id, "source": "machine"} for r in play["team_stats"]]).execute()
-        c.table("pass_events").delete().eq("game_id", game_id).execute()
-        rows_p = db.pass_rows(game_id, run_id, play["passes"])
-        for k in range(0, len(rows_p), 200):
-            c.table("pass_events").insert(rows_p[k:k + 200]).execute()
-    return {"known_goals": compare, "machine_goals_with_no_known_goal": extra}
+        # machine possession / turnovers / passes replace the last machine figures; human-adjusted rows stay.
+        # These are extras: if the database refuses one, say so on the run and keep everything else.
+        try:
+            c.table("team_stats").delete().eq("game_id", game_id).eq("source", "machine").execute()
+            if play["team_stats"]:
+                c.table("team_stats").insert([{**r, "game_id": game_id, "run_id": run_id, "source": "machine"} for r in play["team_stats"]]).execute()
+        except Exception as e:  # noqa: BLE001
+            problems.append(f"team stats not saved: {str(e)[:200]}")
+        try:
+            c.table("pass_events").delete().eq("game_id", game_id).execute()
+            rows_p = db.pass_rows(game_id, run_id, play["passes"])
+            for k in range(0, len(rows_p), 200):
+                c.table("pass_events").insert(rows_p[k:k + 200]).execute()
+        except Exception as e:  # noqa: BLE001
+            problems.append(f"passes not saved: {str(e)[:200]}")
+    return {"known_goals": compare, "machine_goals_with_no_known_goal": extra, "problems": problems}
