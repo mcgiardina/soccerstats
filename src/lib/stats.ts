@@ -3,6 +3,9 @@ import { SET_PIECE_TYPES } from "./types";
 import { periodOf } from "./time";
 
 /** Tags a viewer should trust: human, or machine proposals a human confirmed. */
+/** Below this share of playing time read, a machine possession figure is not shown. */
+export const MIN_POSSESSION_COVERAGE = 0.25;
+
 export function trustedTags(tags: Tag[]): Tag[] {
   return tags.filter((t) => t.source === "human" || t.confirmed === true);
 }
@@ -30,6 +33,8 @@ export interface SideSummary {
   xg: number | null;
   xgShotsLocated: number;
   possession: number | null;
+  /** set when a machine figure exists but was read from too little of the game to show (share of play, 0..1) */
+  possessionThin: number | null;
   possessionSource: "machine" | "human_adjusted" | null;
   turnovers: number | null;
   turnoversSource: "machine" | "human_adjusted" | null;
@@ -101,14 +106,18 @@ export function summarizeGame(
       ? onTargetKnown.filter((s) => s!.on_target).length + shotTags.filter((t) => isGoalTag(t) && shotByTag.get(t.id)?.on_target == null).length
       : null;
     const st = pickStats(teamStats, team, period);
+    const thin = st?.source === "machine" && st?.possession_pct != null && st?.ball_coverage != null && st.ball_coverage < MIN_POSSESSION_COVERAGE;
     return {
       goals,
       shots: shotTags.length,
       shotsOnTarget,
       xg: xg == null ? null : Math.round(xg * 100) / 100,
       xgShotsLocated: located.length,
-      possession: st?.possession_pct ?? null,
-      possessionSource: st?.possession_pct != null ? st.source : null,
+      // A machine possession figure read from under a quarter of the play says more about what the camera
+      // could see than about the game: keep it off the dials and the season chart.
+      possession: thin ? null : st?.possession_pct ?? null,
+      possessionThin: thin ? st!.ball_coverage! : null,
+      possessionSource: !thin && st?.possession_pct != null ? st.source : null,
       turnovers: st?.turnovers ?? null,
       turnoversSource: st?.turnovers != null ? st.source : null,
       corners: mine.filter((t) => t.type === "corner").length,

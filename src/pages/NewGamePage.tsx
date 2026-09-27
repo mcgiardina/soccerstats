@@ -48,11 +48,11 @@ export default function NewGamePage() {
     const mine = words(`${team.name} ${team.shortName}`);
     const score = (n: string) => [...words(n)].filter((w) => mine.has(w)).length;
     const usIdx = score(t[1].name) > score(t[0].name) ? 1 : 0;
-    return { us: t[usIdx], them: t[1 - usIdx] };
+    return { us: t[usIdx], them: t[1 - usIdx], away: usIdx === 1 };
   }, [src, team.name, team.shortName]);
 
   const initial = useMemo(() => (src?.game && sides ? {
-    played_on: src.game.playedOn ?? undefined, opponent: sides.them.name, score_us: sides.us.score, score_them: sides.them.score,
+    played_on: src.game.playedOn ?? undefined, opponent: sides.them.name, home_away: (sides.away ? "away" : "home") as "away" | "home", score_us: sides.us.score, score_them: sides.them.score,
     kit_color: sides.us.color, opp_kit_color: sides.them.color,
   } : undefined), [src, sides]);
 

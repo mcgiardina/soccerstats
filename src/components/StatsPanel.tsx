@@ -29,6 +29,7 @@ export default function StatsPanel({ s, compact, opponent, territory }: { s: Gam
           <Gauge value={territory.them} label={names.them} side="them" chip={<span className="badge machine">≈ Machine</span>} />
         </div>
       </> : null}
+      {show("possession") && s.us.possessionThin != null ? <p className="tiny muted" style={{ textAlign: "center", margin: "0 0 .5rem" }}>Possession isn't shown: the machine could read who had the ball for only {Math.round(s.us.possessionThin * 100)}% of the play.</p> : null}
       <table className="stat-table">
         <thead><tr><th>{names.us}</th><th></th><th>{names.them}</th></tr></thead>
         <tbody>
